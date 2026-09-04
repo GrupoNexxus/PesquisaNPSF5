@@ -1,0 +1,1594 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pesquisa NPS — F5</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --bg:#f5f4f0;
+    --card:#ffffff;
+    --border:#e0dfd8;
+    --purple:#0E7C4A;
+    --purple-light:#E1F3EA;
+    --green:#2FAE72;
+    --green-light:#e9f8f0;
+    --red:#E24B4A;
+    --red-light:#fceded;
+    --amber:#BA7517;
+    --amber-light:#fbf1e3;
+    --ink:#25232b;
+    --muted:#6f6c7a;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    font-family:'Inter',sans-serif;
+    color:var(--ink);
+  }
+  h1,h2,h3,.brand{font-family:'Sora',sans-serif;}
+  header{
+    padding:28px 32px 0 32px;
+    max-width:1180px;
+    margin:0 auto;
+  }
+  .brand{
+    font-size:14px;
+    font-weight:700;
+    color:var(--purple);
+    letter-spacing:0.06em;
+    text-transform:uppercase;
+    margin-bottom:4px;
+  }
+  h1{
+    font-size:28px;
+    font-weight:800;
+    margin:0 0 20px 0;
+  }
+  nav{
+    display:flex;
+    gap:8px;
+    border-bottom:1px solid var(--border);
+  }
+  nav button{
+    border:none;
+    background:none;
+    padding:10px 4px;
+    margin-right:24px;
+    font-family:'Inter',sans-serif;
+    font-size:15px;
+    font-weight:600;
+    color:var(--muted);
+    cursor:pointer;
+    border-bottom:2px solid transparent;
+  }
+  nav button.active{
+    color:var(--purple);
+    border-bottom:2px solid var(--purple);
+  }
+  main{
+    max-width:1180px;
+    margin:0 auto;
+    padding:24px 32px 60px 32px;
+  }
+  .view{display:none;}
+  .view.active{display:block;}
+
+  .toolbar{
+    display:flex;
+    gap:12px;
+    align-items:center;
+    margin-bottom:18px;
+    flex-wrap:wrap;
+  }
+  .toolbar input[type="text"]{
+    padding:10px 14px;
+    border-radius:10px;
+    border:1px solid var(--border);
+    background:var(--card);
+    font-family:'Inter',sans-serif;
+    font-size:14px;
+    min-width:240px;
+  }
+  .filter-chip{
+    padding:8px 14px;
+    border-radius:20px;
+    border:1px solid var(--border);
+    background:var(--card);
+    font-size:13px;
+    font-weight:600;
+    color:var(--muted);
+    cursor:pointer;
+  }
+  .filter-chip.active{
+    background:var(--purple);
+    border-color:var(--purple);
+    color:#fff;
+  }
+
+  .card{
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:14px;
+  }
+
+  table{
+    width:100%;
+    border-collapse:collapse;
+  }
+  thead th{
+    text-align:left;
+    font-size:12px;
+    font-weight:700;
+    text-transform:uppercase;
+    letter-spacing:0.04em;
+    color:var(--muted);
+    padding:14px 16px;
+    border-bottom:1px solid var(--border);
+  }
+  tbody td{
+    padding:14px 16px;
+    font-size:14px;
+    border-bottom:1px solid var(--border);
+  }
+  tbody tr:last-child td{border-bottom:none;}
+  tbody tr:hover{background:#fbfaf8; cursor:pointer;}
+
+  .badge{
+    display:inline-block;
+    padding:4px 10px;
+    border-radius:20px;
+    font-size:12px;
+    font-weight:700;
+  }
+  .badge.a_ligar{background:var(--amber-light); color:var(--amber);}
+  .badge.concluido{background:var(--green-light); color:var(--green);}
+  .badge.retornar{background:var(--purple-light); color:var(--purple);}
+  .badge.nao_atendeu{background:var(--red-light); color:var(--red);}
+  .badge.sem_sucesso{background:var(--red-light); color:var(--red);}
+  .badge.recusou{background:#EDE7D8; color:#8A6D1D;}
+  .badge.enviado_whatsapp{background:#E5F1FB; color:#1D6FA5;}
+
+  .empty{
+    padding:40px;
+    text-align:center;
+    color:var(--muted);
+    font-size:14px;
+  }
+
+  .error-banner{
+    display:none;
+    background:var(--red-light);
+    border:1px solid var(--red);
+    color:var(--red);
+    border-radius:12px;
+    padding:14px 18px;
+    font-size:13px;
+    font-weight:600;
+    margin-bottom:18px;
+  }
+  .error-banner.active{display:block;}
+
+  /* Dashboard */
+  .stats-grid{
+    display:grid;
+    grid-template-columns:repeat(4, 1fr);
+    gap:16px;
+    margin-bottom:24px;
+  }
+  .stat-card{
+    padding:20px;
+  }
+  .stat-label{
+    font-size:12px;
+    font-weight:700;
+    text-transform:uppercase;
+    letter-spacing:0.04em;
+    color:var(--muted);
+    margin-bottom:8px;
+  }
+  .stat-value{
+    font-family:'Sora',sans-serif;
+    font-size:32px;
+    font-weight:800;
+  }
+  .stat-sub{
+    font-size:12px;
+    color:var(--muted);
+    margin-top:4px;
+  }
+
+  .dash-row{
+    display:grid;
+    grid-template-columns:1.3fr 1fr;
+    gap:16px;
+    margin-bottom:16px;
+  }
+  .panel{padding:22px;}
+  .panel h3{
+    font-size:15px;
+    font-weight:700;
+    margin:0 0 16px 0;
+  }
+  .bar-row{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin-bottom:8px;
+  }
+  .bar-label{width:20px; font-size:12px; font-weight:700; color:var(--muted);}
+  .bar-track{
+    flex:1;
+    height:14px;
+    background:#f1f0ec;
+    border-radius:7px;
+    overflow:hidden;
+  }
+  .bar-fill{height:100%; border-radius:7px;}
+  .bar-count{width:30px; text-align:right; font-size:12px; color:var(--muted);}
+
+  .breakdown-item{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:12px 0;
+    border-bottom:1px solid var(--border);
+  }
+  .breakdown-item:last-child{border-bottom:none;}
+  .breakdown-name{font-size:14px; font-weight:600;}
+  .breakdown-count{font-size:14px; font-weight:700; color:var(--muted);}
+
+  .comment-item{
+    padding:14px 0;
+    border-bottom:1px solid var(--border);
+  }
+  .comment-item:last-child{border-bottom:none;}
+  .comment-item .c-head{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:4px;
+  }
+  .comment-item .c-name{font-size:13px; font-weight:700;}
+  .comment-item .c-nota{
+    font-size:12px;
+    font-weight:700;
+    padding:2px 8px;
+    border-radius:10px;
+  }
+  .comment-item .c-text{font-size:13px; color:var(--muted); line-height:1.4;}
+
+  .tel-row{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:10px 12px;
+    border-radius:10px;
+    border:1px solid var(--border);
+    background:#fbfaf8;
+    margin-bottom:6px;
+    cursor:pointer;
+  }
+  .tel-row.funcionou{
+    border-color:var(--green);
+    background:var(--green-light);
+  }
+  .tel-row .tel-info{display:flex; flex-direction:column;}
+  .tel-row .tel-numero{font-size:14px; font-weight:600;}
+  .tel-row .tel-origem{font-size:11px; color:var(--muted);}
+  .tel-row .tel-check{
+    width:20px; height:20px;
+    border-radius:50%;
+    border:2px solid var(--border);
+    flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .tel-row.funcionou .tel-check{
+    border-color:var(--green);
+    background:var(--green);
+    color:#fff;
+    font-size:12px;
+  }
+  .tel-row .tel-remove{
+    font-size:12px;
+    color:var(--muted);
+    margin-left:10px;
+    padding:2px 6px;
+  }
+  .tel-row .tel-remove:hover{color:var(--red);}
+
+  .tel-copy{
+    font-size:11px;
+    font-weight:700;
+    color:var(--purple);
+    background:var(--purple-light);
+    border:none;
+    border-radius:8px;
+    padding:5px 9px;
+    margin-left:8px;
+    cursor:pointer;
+    white-space:nowrap;
+  }
+  .tel-copy:hover{opacity:0.85;}
+
+  .copy-icon-btn{
+    border:none;
+    background:none;
+    cursor:pointer;
+    color:var(--muted);
+    font-size:13px;
+    padding:2px 4px;
+    margin-left:4px;
+    border-radius:6px;
+  }
+  .copy-icon-btn:hover{color:var(--purple); background:var(--purple-light);}
+
+  .hist-item{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:8px 0;
+    border-bottom:1px solid var(--border);
+    font-size:12px;
+  }
+  .hist-item:last-child{border-bottom:none;}
+  .hist-item .h-data{color:var(--muted);}
+
+  /* Modal */
+  .overlay{
+    display:none;
+    position:fixed; inset:0;
+    background:rgba(37,35,43,0.45);
+    align-items:center; justify-content:center;
+    padding:20px;
+    z-index:50;
+  }
+  .overlay.active{display:flex;}
+  .modal{
+    background:var(--card);
+    border-radius:16px;
+    width:100%;
+    max-width:560px;
+    max-height:88vh;
+    overflow-y:auto;
+    padding:28px;
+  }
+  .modal h2{font-size:20px; margin:0 0 2px 0;}
+  .modal .sub{font-size:13px; color:var(--muted); margin-bottom:20px;}
+  .field{margin-bottom:18px;}
+  .field label{
+    display:block;
+    font-size:13px;
+    font-weight:700;
+    margin-bottom:8px;
+  }
+  .field input[type="text"], .field textarea, .field select{
+    width:100%;
+    padding:10px 12px;
+    border-radius:10px;
+    border:1px solid var(--border);
+    font-family:'Inter',sans-serif;
+    font-size:14px;
+    background:#fbfaf8;
+  }
+  .field textarea{resize:vertical; min-height:60px;}
+
+  .status-options, .pill-options{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+  }
+  .pill{
+    padding:9px 14px;
+    border-radius:10px;
+    border:1px solid var(--border);
+    background:#fbfaf8;
+    font-size:13px;
+    font-weight:600;
+    cursor:pointer;
+  }
+  .pill.selected{
+    background:var(--purple);
+    border-color:var(--purple);
+    color:#fff;
+  }
+  .nota-grid{
+    display:grid;
+    grid-template-columns:repeat(11, 1fr);
+    gap:6px;
+  }
+  .nota-pill{
+    text-align:center;
+    padding:10px 0;
+    border-radius:8px;
+    border:1px solid var(--border);
+    background:#fbfaf8;
+    font-size:13px;
+    font-weight:700;
+    cursor:pointer;
+  }
+  .nota-pill.selected{background:var(--purple); border-color:var(--purple); color:#fff;}
+
+  .modal-actions{
+    display:flex;
+    justify-content:flex-end;
+    gap:10px;
+    margin-top:8px;
+  }
+  .btn{
+    padding:11px 20px;
+    border-radius:10px;
+    border:none;
+    font-family:'Inter',sans-serif;
+    font-size:14px;
+    font-weight:700;
+    cursor:pointer;
+  }
+  .btn-primary{background:var(--purple); color:#fff;}
+  .btn-ghost{background:none; color:var(--muted);}
+  .hidden{display:none !important;}
+
+  @media (max-width: 720px){
+    .stats-grid{grid-template-columns:repeat(2,1fr);}
+    .dash-row{grid-template-columns:1fr;}
+    header, main{padding-left:16px; padding-right:16px;}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">F5 Automação</div>
+  <h1>Pesquisa NPS de Clientes</h1>
+  <nav>
+    <button class="tab-btn active" data-view="fila">Fila de ligação</button>
+    <button class="tab-btn" data-view="agenda">Agenda</button>
+    <button class="tab-btn" data-view="respostas">Respostas</button>
+    <button class="tab-btn" data-view="dashboard">Dashboard</button>
+  </nav>
+</header>
+
+<main>
+
+  <div class="error-banner" id="error-banner"></div>
+
+  <!-- ===== FILA DE LIGAÇÃO ===== -->
+  <section id="view-fila" class="view active">
+    <div class="toolbar">
+      <input type="text" id="search" placeholder="Buscar por nome ou código...">
+      <div class="filter-chip active" data-status="todos">Todos</div>
+      <div class="filter-chip" data-status="a_ligar">A ligar</div>
+      <div class="filter-chip" data-status="retornar">Retornar</div>
+      <div class="filter-chip" data-status="nao_atendeu">Não atendeu</div>
+      <div class="filter-chip" data-status="sem_sucesso">Sem sucesso</div>
+      <div class="filter-chip" data-status="recusou">Recusou</div>
+      <div class="filter-chip" data-status="enviado_whatsapp">Enviado WhatsApp</div>
+      <div class="filter-chip" data-status="concluido">Concluído</div>
+    </div>
+    <div class="card">
+      <table>
+        <thead>
+          <tr>
+            <th>Cliente</th>
+            <th>Município/UF</th>
+            <th>Telefone</th>
+            <th>Status</th>
+            <th>Tentativas</th>
+            <th>Último contato</th>
+          </tr>
+        </thead>
+        <tbody id="fila-body"></tbody>
+      </table>
+      <div id="fila-empty" class="empty hidden">Nenhum cliente encontrado.</div>
+    </div>
+  </section>
+
+  <!-- ===== AGENDA ===== -->
+  <section id="view-agenda" class="view">
+    <div class="toolbar">
+      <div class="filter-chip active" data-agenda="todos">Todos os retornos</div>
+      <div class="filter-chip" data-agenda="atrasado">Atrasados</div>
+      <div class="filter-chip" data-agenda="hoje">Hoje</div>
+      <div class="filter-chip" data-agenda="futuro">Próximos</div>
+    </div>
+    <div class="card">
+      <table>
+        <thead>
+          <tr>
+            <th>Cliente</th>
+            <th>Município/UF</th>
+            <th>Telefone</th>
+            <th>Data de retorno</th>
+            <th>Tentativas</th>
+            <th>Situação</th>
+          </tr>
+        </thead>
+        <tbody id="agenda-body"></tbody>
+      </table>
+      <div id="agenda-empty" class="empty hidden">Nenhum retorno agendado.</div>
+    </div>
+  </section>
+
+  <!-- ===== RESPOSTAS ===== -->
+  <section id="view-respostas" class="view">
+    <div class="toolbar">
+      <input type="text" id="search-respostas" placeholder="Buscar por cliente...">
+      <button type="button" class="btn btn-ghost" id="btn-exportar-xls" style="border:1px solid var(--border); padding:9px 16px; white-space:nowrap; margin-left:auto;">⬇ Exportar Excel</button>
+    </div>
+    <div class="card">
+      <table>
+        <thead>
+          <tr>
+            <th>Cliente</th>
+            <th>Nome do respondente</th>
+            <th>Data</th>
+            <th>Nota</th>
+            <th>Indicou</th>
+            <th>Motivo</th>
+            <th>Suporte</th>
+            <th>Comentário</th>
+          </tr>
+        </thead>
+        <tbody id="respostas-body"></tbody>
+      </table>
+      <div id="respostas-empty" class="empty hidden">Nenhuma resposta registrada ainda.</div>
+    </div>
+  </section>
+
+  <!-- ===== DASHBOARD ===== -->
+  <section id="view-dashboard" class="view">
+    <div class="stats-grid">
+      <div class="card stat-card">
+        <div class="stat-label">NPS</div>
+        <div class="stat-value" id="stat-nps">—</div>
+        <div class="stat-sub" id="stat-nps-sub">sem respostas ainda</div>
+      </div>
+      <div class="card stat-card">
+        <div class="stat-label">Respostas coletadas</div>
+        <div class="stat-value" id="stat-respostas">0</div>
+        <div class="stat-sub" id="stat-respostas-sub">de 0 clientes ativos</div>
+      </div>
+      <div class="card stat-card">
+        <div class="stat-label">Faltam ligar</div>
+        <div class="stat-value" id="stat-faltam">0</div>
+        <div class="stat-sub">a ligar + retornar</div>
+      </div>
+      <div class="card stat-card">
+        <div class="stat-label">Não atenderam</div>
+        <div class="stat-value" id="stat-nao-atendeu">0</div>
+        <div class="stat-sub">tentativas sem sucesso</div>
+      </div>
+    </div>
+
+    <div class="dash-row">
+      <div class="card panel">
+        <h3>Distribuição das notas</h3>
+        <div id="notas-chart"></div>
+      </div>
+      <div class="card panel">
+        <h3>Categorias</h3>
+        <div id="categorias-breakdown"></div>
+      </div>
+    </div>
+
+    <div class="dash-row">
+      <div class="card panel">
+        <h3>Motivos da nota</h3>
+        <div id="motivo-breakdown"></div>
+      </div>
+      <div class="card panel">
+        <h3>Avaliação do suporte</h3>
+        <div id="suporte-breakdown"></div>
+      </div>
+    </div>
+
+    <div class="dash-row">
+      <div class="card panel">
+        <h3>Respostas por dia <span style="font-weight:400; color:var(--muted); font-size:12px;">— últimos 14 dias</span></h3>
+        <div id="respostas-por-dia"></div>
+      </div>
+      <div class="card panel">
+        <h3>Respostas por mês</h3>
+        <div id="respostas-por-mes"></div>
+      </div>
+    </div>
+
+    <div class="card panel" style="margin-bottom:16px;">
+      <h3>Comentários por categoria</h3>
+      <div class="pill-options" id="comentarios-tabs" style="margin-bottom:16px;">
+        <div class="pill selected" data-cat="bons">Elogios (nota 9-10)</div>
+        <div class="pill" data-cat="ruins">Críticas (nota 0-6)</div>
+        <div class="pill" data-cat="Suporte (atendimento bom ou ruim)">Suporte</div>
+        <div class="pill" data-cat="Preços dos serviços">Financeiro</div>
+        <div class="pill" data-cat="Produto (bom ou ruim)">Produto</div>
+        <div class="pill" data-cat="Bom relacionamento com empresa">Relacionamento</div>
+      </div>
+      <div id="comentarios-list"></div>
+    </div>
+  </section>
+
+</main>
+
+<!-- ===== MODAL DE CONTATO ===== -->
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <h2 id="modal-nome">Cliente</h2>
+    <div class="sub" id="modal-sub"></div>
+
+    <div class="field" id="historico-wrapper" style="display:none;">
+      <label>Tentativas de contato anteriores</label>
+      <div class="card" style="padding:4px 14px; max-height:140px; overflow-y:auto;" id="historico-list"></div>
+    </div>
+
+    <div class="field">
+      <label>Números de telefone <span style="font-weight:400; color:var(--muted);">— marque o que deu certo</span></label>
+      <div id="telefones-list"></div>
+      <div style="display:flex; gap:8px; margin-top:8px;">
+        <input type="text" id="novo-telefone" placeholder="Adicionar outro número..." style="flex:1; padding:9px 12px; border-radius:10px; border:1px solid var(--border); font-family:'Inter',sans-serif; font-size:13px; background:#fbfaf8;">
+        <button type="button" class="btn btn-ghost" id="btn-add-telefone" style="border:1px solid var(--border); padding:9px 14px;">+ Adicionar</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Resultado da ligação</label>
+      <div class="status-options">
+        <div class="pill" data-status="concluido">Respondeu a pesquisa</div>
+        <div class="pill" data-status="retornar">Pedir para retornar</div>
+        <div class="pill" data-status="nao_atendeu">Não atendeu</div>
+        <div class="pill" data-status="sem_sucesso">Ligação sem sucesso</div>
+        <div class="pill" data-status="recusou">Não quis responder a pesquisa</div>
+        <div class="pill" data-status="enviado_whatsapp">Pesquisa enviada por WhatsApp</div>
+      </div>
+    </div>
+
+    <!-- Bloco: pesquisa completa -->
+    <div id="bloco-pesquisa" class="hidden">
+      <div class="field">
+        <label>Nome de quem respondeu <span style="color:var(--red);">*</span></label>
+        <input type="text" id="f-nome-respondente" placeholder="Nome do contato">
+      </div>
+      <div class="field">
+        <label>No último ano, chegou a indicar a F5 para alguém? <span style="color:var(--red);">*</span></label>
+        <div class="pill-options" id="f-indicou">
+          <div class="pill" data-value="Sim">Sim</div>
+          <div class="pill" data-value="Não">Não</div>
+        </div>
+      </div>
+      <div class="field">
+        <label>De 0 a 10, o quanto indicaria a F5 para um amigo ou colega? <span style="color:var(--red);">*</span></label>
+        <div class="nota-grid" id="f-nota">
+          <div class="nota-pill" data-value="0">0</div>
+          <div class="nota-pill" data-value="1">1</div>
+          <div class="nota-pill" data-value="2">2</div>
+          <div class="nota-pill" data-value="3">3</div>
+          <div class="nota-pill" data-value="4">4</div>
+          <div class="nota-pill" data-value="5">5</div>
+          <div class="nota-pill" data-value="6">6</div>
+          <div class="nota-pill" data-value="7">7</div>
+          <div class="nota-pill" data-value="8">8</div>
+          <div class="nota-pill" data-value="9">9</div>
+          <div class="nota-pill" data-value="10">10</div>
+        </div>
+      </div>
+      <div class="field">
+        <label>Qual o motivo dessa nota? <span style="color:var(--red);">*</span> <span style="font-weight:400; color:var(--muted);">— pode marcar mais de um</span></label>
+        <div class="pill-options" id="f-motivo">
+          <div class="pill" data-value="Bom relacionamento com empresa">Bom relacionamento com empresa</div>
+          <div class="pill" data-value="Preços dos serviços">Preços dos serviços</div>
+          <div class="pill" data-value="Produto (bom ou ruim)">Produto (bom ou ruim)</div>
+          <div class="pill" data-value="Suporte (atendimento bom ou ruim)">Suporte (atendimento bom ou ruim)</div>
+        </div>
+      </div>
+      <div class="field">
+        <label>Como tem sido a experiência com o suporte técnico? <span style="color:var(--red);">*</span></label>
+        <select id="f-suporte">
+          <option value="">Selecione...</option>
+          <option>Excelente</option>
+          <option>Bom</option>
+          <option>Regular</option>
+          <option>Ruim</option>
+          <option>Não utiliza</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>O que poderíamos mudar ou melhorar? <span style="color:var(--red);">*</span></label>
+        <textarea id="f-sugestao" placeholder="Resposta do cliente (opcional)"></textarea>
+      </div>
+    </div>
+
+    <!-- Bloco: retornar -->
+    <div id="bloco-retornar" class="hidden">
+      <div class="field">
+        <label>Data e hora para retornar</label>
+        <input type="datetime-local" id="f-data-retorno">
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Observação interna</label>
+      <textarea id="f-obs" placeholder="Anotações internas sobre essa ligação"></textarea>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="btn-cancelar">Cancelar</button>
+      <button class="btn btn-primary" id="btn-salvar">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// CONFIGURAÇÃO — preencha com os dados do seu projeto Supabase
+// ============================================================
+const SUPABASE_URL = "https://ylovvnmmivdtsleniism.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlsb3Z2bm1taXZkdHNsZW5paXNtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg1NDE0MjAsImV4cCI6MjEwNDExNzQyMH0.K3Q3wpu6aXqgXZu5avGYW6-EP515JQ9T6Qq1omkGR20";
+
+// URL do Web App do Google Apps Script (veja instruções no README).
+// Deixe em branco ("") pra desativar o envio automático pra planilha.
+const GOOGLE_SHEETS_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbzRAmiFFbXs0H1HBNiYELmAAj0Z_bUazS6CkUqLHxBD1cD0Nik3l37RvLvr5mUmtrQe/exec";
+
+let clientes = [];
+let respostas = [];
+let historico = [];
+let currentStatusFilter = "todos";
+let currentSearch = "";
+let selectedCliente = null;
+let modalStatus = null;
+let modalIndicou = null;
+let modalNota = null;
+let modalMotivos = [];
+let db = null;
+let currentComentarioCat = "bons";
+let currentSearchRespostas = "";
+let currentAgendaFilter = "todos";
+let modalTelefones = [];
+
+function melhorNumero(c) {
+  if (Array.isArray(c.telefones)) {
+    const ok = c.telefones.find(t => t.funcionou);
+    if (ok) return ok.numero;
+  }
+  return c.whatsapp || c.telefone || "—";
+}
+
+function nomeComCodigo(c) {
+  if (!c) return "";
+  const nome = c.nome_fantasia || c.nome;
+  return c.codigo ? `${c.codigo} · ${nome}` : nome;
+}
+
+function numeroParaDiscagem(numero) {
+  const digitos = (numero || "").replace(/\D/g, "");
+  if (!digitos) return "";
+  return digitos.startsWith("0") ? digitos : "0" + digitos;
+}
+
+async function copiarNumero(numero, btnEl) {
+  const formatado = numeroParaDiscagem(numero);
+  if (!formatado) return;
+  try {
+    await navigator.clipboard.writeText(formatado);
+  } catch (e) {
+    // fallback pra navegadores/ambientes sem permissão de clipboard
+    const temp = document.createElement("textarea");
+    temp.value = formatado;
+    temp.style.position = "fixed";
+    temp.style.opacity = "0";
+    document.body.appendChild(temp);
+    temp.select();
+    try { document.execCommand("copy"); } catch (e2) { console.warn("Não foi possível copiar:", e2); }
+    document.body.removeChild(temp);
+  }
+  if (btnEl) {
+    const original = btnEl.textContent;
+    btnEl.textContent = "Copiado!";
+    setTimeout(() => { btnEl.textContent = original; }, 1200);
+  }
+}
+
+// ---------- Navegação entre abas (sempre funciona, independente do banco) ----------
+document.querySelectorAll(".tab-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
+    btn.classList.add("active");
+    document.getElementById("view-" + btn.dataset.view).classList.add("active");
+    if (btn.dataset.view === "dashboard") { renderDashboard(); renderComentarios(currentComentarioCat); }
+    if (btn.dataset.view === "agenda") renderAgenda();
+    if (btn.dataset.view === "respostas") renderRespostas();
+  });
+});
+
+function showError(msg) {
+  const banner = document.getElementById("error-banner");
+  banner.textContent = msg;
+  banner.classList.add("active");
+}
+
+function clearError() {
+  document.getElementById("error-banner").classList.remove("active");
+}
+
+// ---------- Conexão com o Supabase ----------
+function initSupabase() {
+  if (typeof window.supabase === "undefined") {
+    showError("Não foi possível carregar a biblioteca do Supabase (falha de conexão com o CDN). Verifique sua internet e recarregue a página.");
+    return false;
+  }
+  try {
+    db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    return true;
+  } catch (e) {
+    console.error(e);
+    showError("Erro ao conectar ao Supabase. Confira a URL e a chave configuradas no arquivo.");
+    return false;
+  }
+}
+
+// ---------- Carregar dados ----------
+async function loadData() {
+  if (!db) return;
+  clearError();
+  try {
+    const { data: cData, error: cErr } = await db.from("clientes").select("*").order("nome");
+    if (cErr) {
+      console.error(cErr);
+      showError("Erro ao carregar clientes: " + cErr.message);
+      return;
+    }
+    clientes = cData || [];
+
+    const { data: rData, error: rErr } = await db.from("respostas_nps").select("*");
+    if (rErr) {
+      console.error(rErr);
+      showError("Clientes carregados, mas houve erro ao carregar respostas: " + rErr.message);
+    }
+    respostas = rData || [];
+
+    const { data: hData, error: hErr } = await db.from("historico_contatos").select("*").order("data", { ascending: false });
+    if (hErr) {
+      console.error(hErr);
+    }
+    historico = hData || [];
+
+    renderFila();
+    renderAgenda();
+    renderRespostas();
+    if (document.getElementById("view-dashboard").classList.contains("active")) {
+      renderDashboard();
+      renderComentarios(currentComentarioCat);
+    }
+  } catch (e) {
+    console.error(e);
+    showError("Erro inesperado ao carregar dados. Veja o console (F12) para detalhes.");
+  }
+}
+
+// ---------- Fila de ligação ----------
+document.getElementById("search").addEventListener("input", (e) => {
+  currentSearch = e.target.value.toLowerCase();
+  renderFila();
+});
+
+document.querySelectorAll("#view-fila .filter-chip").forEach(chip => {
+  chip.addEventListener("click", () => {
+    document.querySelectorAll("#view-fila .filter-chip").forEach(c => c.classList.remove("active"));
+    chip.classList.add("active");
+    currentStatusFilter = chip.dataset.status;
+    renderFila();
+  });
+});
+
+const STATUS_LABEL = {
+  a_ligar: "A ligar",
+  concluido: "Concluído",
+  retornar: "Retornar",
+  nao_atendeu: "Não atendeu",
+  sem_sucesso: "Ligação sem sucesso",
+  recusou: "Não quis responder",
+  enviado_whatsapp: "Enviado por WhatsApp"
+};
+
+function renderFila() {
+  let list = clientes.filter(c => {
+    const matchStatus = currentStatusFilter === "todos" || c.status === currentStatusFilter;
+    const matchSearch = !currentSearch
+      || (c.nome || "").toLowerCase().includes(currentSearch)
+      || (c.nome_fantasia || "").toLowerCase().includes(currentSearch)
+      || String(c.codigo || "").toLowerCase().includes(currentSearch);
+    return matchStatus && matchSearch;
+  });
+
+  const tbody = document.getElementById("fila-body");
+  const empty = document.getElementById("fila-empty");
+  tbody.innerHTML = "";
+
+  if (list.length === 0) {
+    empty.classList.remove("hidden");
+    empty.textContent = clientes.length === 0
+      ? "Nenhum cliente cadastrado ainda. Confira se a importação do CSV foi concluída no Supabase (Table Editor > clientes)."
+      : "Nenhum cliente encontrado com esse filtro/busca.";
+    return;
+  }
+  empty.classList.add("hidden");
+
+  list.forEach(c => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><strong>${escapeHtml(nomeComCodigo(c))}</strong></td>
+      <td>${escapeHtml([c.municipio, c.uf].filter(Boolean).join("/"))}</td>
+      <td>${escapeHtml(melhorNumero(c))}${melhorNumero(c) !== "—" ? '<button type="button" class="copy-icon-btn" title="Copiar número">⧉</button>' : ""}</td>
+      <td><span class="badge ${c.status}">${STATUS_LABEL[c.status] || c.status}</span></td>
+      <td style="text-align:center;">${c.tentativas || 0}</td>
+      <td>${c.data_contato ? new Date(c.data_contato).toLocaleDateString("pt-BR") : "—"}</td>
+    `;
+    const copyBtnFila = tr.querySelector(".copy-icon-btn");
+    if (copyBtnFila) {
+      copyBtnFila.addEventListener("click", (e) => {
+        e.stopPropagation();
+        copiarNumero(melhorNumero(c), null);
+        const original = copyBtnFila.textContent;
+        copyBtnFila.textContent = "✓";
+        setTimeout(() => { copyBtnFila.textContent = original; }, 1200);
+      });
+    }
+    tr.addEventListener("click", () => openModal(c));
+    tbody.appendChild(tr);
+  });
+}
+
+// ---------- Agenda ----------
+document.querySelectorAll("#view-agenda .filter-chip").forEach(chip => {
+  chip.addEventListener("click", () => {
+    document.querySelectorAll("#view-agenda .filter-chip").forEach(c => c.classList.remove("active"));
+    chip.classList.add("active");
+    currentAgendaFilter = chip.dataset.agenda;
+    renderAgenda();
+  });
+});
+
+function renderAgenda() {
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+
+  let list = clientes
+    .filter(c => c.status === "retornar" && c.data_retorno)
+    .map(c => {
+      const dr = new Date(c.data_retorno);
+      const drDia = new Date(dr);
+      drDia.setHours(0, 0, 0, 0);
+      let situacao = "futuro";
+      if (drDia < hoje) situacao = "atrasado";
+      else if (drDia.getTime() === hoje.getTime()) situacao = "hoje";
+      return { ...c, _situacao: situacao, _dr: dr };
+    })
+    .filter(c => currentAgendaFilter === "todos" || c._situacao === currentAgendaFilter)
+    .sort((a, b) => a._dr - b._dr);
+
+  const tbody = document.getElementById("agenda-body");
+  const empty = document.getElementById("agenda-empty");
+  tbody.innerHTML = "";
+
+  if (list.length === 0) {
+    empty.classList.remove("hidden");
+    return;
+  }
+  empty.classList.add("hidden");
+
+  const SITUACAO_LABEL = { atrasado: "Atrasado", hoje: "Hoje", futuro: "Próximo" };
+  const SITUACAO_COLOR = { atrasado: "nao_atendeu", hoje: "a_ligar", futuro: "retornar" };
+
+  list.forEach(c => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><strong>${escapeHtml(nomeComCodigo(c))}</strong></td>
+      <td>${escapeHtml([c.municipio, c.uf].filter(Boolean).join("/"))}</td>
+      <td>${escapeHtml(melhorNumero(c))}${melhorNumero(c) !== "—" ? '<button type="button" class="copy-icon-btn" title="Copiar número">⧉</button>' : ""}</td>
+      <td>${c._dr.toLocaleDateString("pt-BR")} às ${c._dr.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</td>
+      <td style="text-align:center;">${c.tentativas || 0}</td>
+      <td><span class="badge ${SITUACAO_COLOR[c._situacao]}">${SITUACAO_LABEL[c._situacao]}</span></td>
+    `;
+    const copyBtnAgenda = tr.querySelector(".copy-icon-btn");
+    if (copyBtnAgenda) {
+      copyBtnAgenda.addEventListener("click", (e) => {
+        e.stopPropagation();
+        copiarNumero(melhorNumero(c), null);
+        const original = copyBtnAgenda.textContent;
+        copyBtnAgenda.textContent = "✓";
+        setTimeout(() => { copyBtnAgenda.textContent = original; }, 1200);
+      });
+    }
+    tr.addEventListener("click", () => openModal(c));
+    tbody.appendChild(tr);
+  });
+}
+
+// ---------- Respostas ----------
+document.getElementById("search-respostas").addEventListener("input", (e) => {
+  currentSearchRespostas = e.target.value.toLowerCase();
+  renderRespostas();
+});
+
+function renderRespostas() {
+  const clientesById = Object.fromEntries(clientes.map(c => [c.id, c]));
+
+  let list = respostas
+    .map(r => ({ ...r, _cliente: clientesById[r.cliente_id] }))
+    .filter(r => {
+      if (!currentSearchRespostas) return true;
+      const nome = (r._cliente ? nomeComCodigo(r._cliente) : "").toLowerCase();
+      return nome.includes(currentSearchRespostas);
+    })
+    .sort((a, b) => new Date(b.data) - new Date(a.data));
+
+  const tbody = document.getElementById("respostas-body");
+  const empty = document.getElementById("respostas-empty");
+  tbody.innerHTML = "";
+
+  if (list.length === 0) {
+    empty.classList.remove("hidden");
+    return;
+  }
+  empty.classList.add("hidden");
+
+  list.forEach(r => {
+    const nomeCliente = r._cliente ? nomeComCodigo(r._cliente) : "Cliente não encontrado";
+    const notaColor = r.nota >= 9 ? "var(--green)" : r.nota >= 7 ? "var(--amber)" : "var(--red)";
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><strong>${escapeHtml(nomeCliente)}</strong></td>
+      <td>${escapeHtml(r.nome_respondente || "—")}</td>
+      <td>${new Date(r.data).toLocaleDateString("pt-BR")}</td>
+      <td><span style="color:${notaColor}; font-weight:700;">${r.nota}</span></td>
+      <td>${escapeHtml(r.indicou || "—")}</td>
+      <td>${escapeHtml(Array.isArray(r.motivo) ? r.motivo.join(", ") : (r.motivo || "—"))}</td>
+      <td>${escapeHtml(r.avaliacao_suporte || "—")}</td>
+      <td>${escapeHtml(r.sugestao || "—")}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+// ---------- Exportar respostas para Excel ----------
+function exportarRespostasXLS() {
+  if (typeof XLSX === "undefined") {
+    alert("Não foi possível carregar a biblioteca de exportação. Verifique sua internet e recarregue a página.");
+    return;
+  }
+  if (respostas.length === 0) {
+    alert("Ainda não há respostas para exportar.");
+    return;
+  }
+
+  const clientesById = Object.fromEntries(clientes.map(c => [c.id, c]));
+
+  const linhas = [...respostas]
+    .sort((a, b) => new Date(b.data) - new Date(a.data))
+    .map(r => {
+      const cliente = clientesById[r.cliente_id];
+      const telFuncionou = cliente && Array.isArray(cliente.telefones) ? cliente.telefones.find(t => t.funcionou) : null;
+      return {
+        "Data da Resposta": r.data ? new Date(r.data).toLocaleString("pt-BR") : "",
+        "Código": cliente ? (cliente.codigo || "") : "",
+        "Cliente": cliente ? (cliente.nome_fantasia || cliente.nome) : "Cliente não encontrado",
+        "CNPJ/CPF": cliente ? (cliente.cnpj_cpf || "") : "",
+        "Telefone usado": telFuncionou ? telFuncionou.numero : "",
+        "Nome do respondente": r.nome_respondente || "",
+        "Indicou?": r.indicou || "",
+        "Nota": r.nota != null ? r.nota : "",
+        "Motivo": Array.isArray(r.motivo) ? r.motivo.join("; ") : (r.motivo || ""),
+        "Avaliação do suporte": r.avaliacao_suporte || "",
+        "Se você pudesse mudar ou melhorar algo no nosso atendimento ou serviço, o que seria?": r.sugestao || "",
+        "Observação interna": r.obs_interna || ""
+      };
+    });
+
+  const ws = XLSX.utils.json_to_sheet(linhas);
+  ws["!cols"] = [
+    { wch: 18 }, // Data da Resposta
+    { wch: 10 }, // Código
+    { wch: 34 }, // Cliente
+    { wch: 18 }, // CNPJ/CPF
+    { wch: 16 }, // Telefone usado
+    { wch: 24 }, // Nome do respondente
+    { wch: 10 }, // Indicou?
+    { wch: 6 },  // Nota
+    { wch: 45 }, // Motivo
+    { wch: 18 }, // Avaliação do suporte
+    { wch: 55 }, // pergunta de melhoria
+    { wch: 30 }  // Observação interna
+  ];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Respostas");
+
+  const hoje = new Date();
+  const dataArquivo = hoje.toISOString().slice(0, 10);
+  XLSX.writeFile(wb, `Respostas_NPS_${dataArquivo}.xlsx`);
+}
+
+document.getElementById("btn-exportar-xls").addEventListener("click", exportarRespostasXLS);
+document.querySelectorAll("#comentarios-tabs .pill").forEach(pill => {
+  pill.addEventListener("click", () => {
+    document.querySelectorAll("#comentarios-tabs .pill").forEach(p => p.classList.remove("selected"));
+    pill.classList.add("selected");
+    currentComentarioCat = pill.dataset.cat;
+    renderComentarios(currentComentarioCat);
+  });
+});
+
+function renderComentarios(cat) {
+  const clientesById = Object.fromEntries(clientes.map(c => [c.id, c]));
+  const box = document.getElementById("comentarios-list");
+  if (!box) return;
+
+  let list;
+  if (cat === "bons") list = respostas.filter(r => r.nota >= 9);
+  else if (cat === "ruins") list = respostas.filter(r => r.nota <= 6);
+  else list = respostas.filter(r => Array.isArray(r.motivo) && r.motivo.includes(cat));
+
+  // só mostra quem realmente deixou algum comentário
+  list = list.filter(r => r.sugestao && r.sugestao.trim() !== "");
+
+  box.innerHTML = "";
+  if (list.length === 0) {
+    box.innerHTML = '<div class="empty">Nenhum comentário nessa categoria ainda.</div>';
+    return;
+  }
+
+  list
+    .sort((a, b) => new Date(b.data) - new Date(a.data))
+    .forEach(r => {
+      const cliente = clientesById[r.cliente_id];
+      const nome = cliente ? nomeComCodigo(cliente) : "Cliente não encontrado";
+      const notaColor = r.nota >= 9 ? "var(--green-light)" : r.nota >= 7 ? "var(--amber-light)" : "var(--red-light)";
+      const notaTextColor = r.nota >= 9 ? "var(--green)" : r.nota >= 7 ? "var(--amber)" : "var(--red)";
+      const div = document.createElement("div");
+      div.className = "comment-item";
+      div.innerHTML = `
+        <div class="c-head">
+          <span class="c-name">${escapeHtml(nome)}</span>
+          <span class="c-nota" style="background:${notaColor}; color:${notaTextColor};">Nota ${r.nota}</span>
+        </div>
+        <div class="c-text">${escapeHtml(r.sugestao)}</div>
+      `;
+      box.appendChild(div);
+    });
+}
+
+// ---------- Modal ----------
+function toDatetimeLocalValue(isoString) {
+  const dt = new Date(isoString);
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}T${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+}
+
+// ---------- Números de telefone ----------
+function buildTelefonesIniciais(cliente) {
+  if (Array.isArray(cliente.telefones) && cliente.telefones.length > 0) {
+    return cliente.telefones.map(t => ({ numero: t.numero, funcionou: !!t.funcionou, origem: t.origem || "Extra" }));
+  }
+  const arr = [];
+  if (cliente.telefone) arr.push({ numero: cliente.telefone, funcionou: false, origem: "Telefone" });
+  if (cliente.whatsapp && cliente.whatsapp !== cliente.telefone) arr.push({ numero: cliente.whatsapp, funcionou: false, origem: "WhatsApp" });
+  return arr;
+}
+
+function renderTelefonesUI() {
+  const box = document.getElementById("telefones-list");
+  box.innerHTML = "";
+  if (modalTelefones.length === 0) {
+    box.innerHTML = '<div class="empty" style="padding:16px;">Nenhum número cadastrado. Adicione um abaixo.</div>';
+    return;
+  }
+  modalTelefones.forEach((t, i) => {
+    const row = document.createElement("div");
+    row.className = "tel-row" + (t.funcionou ? " funcionou" : "");
+    row.innerHTML = `
+      <div class="tel-info">
+        <span class="tel-numero">${escapeHtml(t.numero)}</span>
+        <span class="tel-origem">${escapeHtml(t.origem)}${t.funcionou ? " · deu certo" : ""}</span>
+      </div>
+      <div style="display:flex; align-items:center;">
+        <div class="tel-check">${t.funcionou ? "✓" : ""}</div>
+        <button type="button" class="tel-copy">Copiar</button>
+        <span class="tel-remove" data-i="${i}">remover</span>
+      </div>
+    `;
+    row.querySelector(".tel-check").addEventListener("click", (e) => {
+      e.stopPropagation();
+      toggleTelefoneFuncionou(i);
+    });
+    row.querySelector(".tel-copy").addEventListener("click", (e) => {
+      e.stopPropagation();
+      copiarNumero(t.numero, e.currentTarget);
+    });
+    row.querySelector(".tel-remove").addEventListener("click", (e) => {
+      e.stopPropagation();
+      modalTelefones.splice(i, 1);
+      renderTelefonesUI();
+    });
+    row.addEventListener("click", () => {
+      toggleTelefoneFuncionou(i);
+    });
+    box.appendChild(row);
+  });
+}
+
+function toggleTelefoneFuncionou(i) {
+  const jaEstavaMarcado = modalTelefones[i].funcionou;
+  modalTelefones.forEach((tt, ii) => { tt.funcionou = (!jaEstavaMarcado && ii === i); });
+  renderTelefonesUI();
+}
+
+document.getElementById("btn-add-telefone").addEventListener("click", () => {
+  const input = document.getElementById("novo-telefone");
+  const val = input.value.trim();
+  if (!val) return;
+  modalTelefones.push({ numero: val, funcionou: false, origem: "Extra" });
+  input.value = "";
+  renderTelefonesUI();
+});
+
+document.getElementById("novo-telefone").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); document.getElementById("btn-add-telefone").click(); }
+});
+
+function renderHistoricoModal(clienteId) {
+  const wrapper = document.getElementById("historico-wrapper");
+  const list = document.getElementById("historico-list");
+  const itens = historico.filter(h => h.cliente_id === clienteId).sort((a, b) => new Date(b.data) - new Date(a.data));
+
+  if (itens.length === 0) {
+    wrapper.style.display = "none";
+    return;
+  }
+  wrapper.style.display = "block";
+  list.innerHTML = "";
+  itens.forEach(h => {
+    const div = document.createElement("div");
+    div.className = "hist-item";
+    div.innerHTML = `
+      <span>${STATUS_LABEL[h.status] || h.status}${h.obs ? " — " + escapeHtml(h.obs) : ""}</span>
+      <span class="h-data">${new Date(h.data).toLocaleDateString("pt-BR")} ${new Date(h.data).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</span>
+    `;
+    list.appendChild(div);
+  });
+}
+
+function openModal(cliente) {
+  selectedCliente = cliente;
+  modalStatus = null; modalIndicou = null; modalNota = null; modalMotivos = [];
+
+  document.getElementById("modal-nome").textContent = nomeComCodigo(cliente);
+  document.getElementById("modal-sub").textContent = [cliente.cnpj_cpf, melhorNumero(cliente)].filter(Boolean).join(" · ");
+
+  document.querySelectorAll("#overlay .pill").forEach(p => p.classList.remove("selected"));
+  document.querySelectorAll("#overlay .nota-pill").forEach(p => p.classList.remove("selected"));
+  document.getElementById("bloco-pesquisa").classList.add("hidden");
+  document.getElementById("bloco-retornar").classList.add("hidden");
+  document.getElementById("f-nome-respondente").value = "";
+  document.getElementById("f-suporte").value = "";
+  document.getElementById("f-sugestao").value = "";
+  document.getElementById("f-obs").value = "";
+  document.getElementById("f-data-retorno").value = "";
+
+  modalTelefones = buildTelefonesIniciais(cliente);
+  renderTelefonesUI();
+  renderHistoricoModal(cliente.id);
+
+  // se o cliente já tem um retorno agendado, mostra a data/hora atual pra edição
+  if (cliente.status === "retornar" && cliente.data_retorno) {
+    modalStatus = "retornar";
+    const retornarPill = document.querySelector('.status-options .pill[data-status="retornar"]');
+    if (retornarPill) retornarPill.classList.add("selected");
+    document.getElementById("bloco-retornar").classList.remove("hidden");
+    document.getElementById("f-data-retorno").value = toDatetimeLocalValue(cliente.data_retorno);
+  }
+
+  document.getElementById("overlay").classList.add("active");
+}
+
+document.getElementById("btn-cancelar").addEventListener("click", () => {
+  document.getElementById("overlay").classList.remove("active");
+});
+
+document.querySelectorAll(".status-options .pill").forEach(pill => {
+  pill.addEventListener("click", () => {
+    document.querySelectorAll(".status-options .pill").forEach(p => p.classList.remove("selected"));
+    pill.classList.add("selected");
+    modalStatus = pill.dataset.status;
+    document.getElementById("bloco-pesquisa").classList.toggle("hidden", modalStatus !== "concluido");
+    document.getElementById("bloco-retornar").classList.toggle("hidden", modalStatus !== "retornar");
+  });
+});
+
+document.querySelectorAll("#f-indicou .pill").forEach(pill => {
+  pill.addEventListener("click", () => {
+    document.querySelectorAll("#f-indicou .pill").forEach(p => p.classList.remove("selected"));
+    pill.classList.add("selected");
+    modalIndicou = pill.dataset.value;
+  });
+});
+
+document.querySelectorAll("#f-motivo .pill").forEach(pill => {
+  pill.addEventListener("click", () => {
+    const val = pill.dataset.value;
+    if (modalMotivos.includes(val)) {
+      modalMotivos = modalMotivos.filter(m => m !== val);
+      pill.classList.remove("selected");
+    } else {
+      modalMotivos.push(val);
+      pill.classList.add("selected");
+    }
+  });
+});
+
+document.querySelectorAll(".nota-pill").forEach(pill => {
+  pill.addEventListener("click", () => {
+    document.querySelectorAll(".nota-pill").forEach(p => p.classList.remove("selected"));
+    pill.classList.add("selected");
+    modalNota = parseInt(pill.dataset.value, 10);
+  });
+});
+
+function syncToGoogleSheets(payload) {
+  if (!GOOGLE_SHEETS_WEBHOOK_URL) return;
+  fetch(GOOGLE_SHEETS_WEBHOOK_URL, {
+    method: "POST",
+    mode: "no-cors",
+    headers: { "Content-Type": "text/plain" },
+    body: JSON.stringify(payload)
+  }).catch(e => console.warn("Não foi possível sincronizar com a planilha:", e));
+}
+
+document.getElementById("btn-salvar").addEventListener("click", async () => {
+  if (!db) { showError("Sem conexão com o banco de dados. Recarregue a página."); return; }
+  if (!modalStatus) { alert("Selecione o resultado da ligação."); return; }
+
+  if (modalStatus === "concluido") {
+    const camposFaltando = [];
+    if (!document.getElementById("f-nome-respondente").value.trim()) camposFaltando.push("Nome de quem respondeu");
+    if (!modalIndicou) camposFaltando.push("Indicou a F5?");
+    if (modalNota === null) camposFaltando.push("Nota de 0 a 10");
+    if (modalMotivos.length === 0) camposFaltando.push("Motivo da nota");
+    if (!document.getElementById("f-suporte").value) camposFaltando.push("Avaliação do suporte");
+    if (!document.getElementById("f-sugestao").value.trim()) camposFaltando.push("O que poderia melhorar");
+
+    if (camposFaltando.length > 0) {
+      alert("Faltam preencher:\n\n• " + camposFaltando.join("\n• "));
+      return;
+    }
+  }
+
+  const updates = {
+    status: modalStatus,
+    data_contato: new Date().toISOString(),
+    obs: document.getElementById("f-obs").value || null,
+    telefones: modalTelefones,
+    tentativas: (selectedCliente.tentativas || 0) + 1
+  };
+
+  if (modalStatus === "retornar") {
+    const dataRetornoInput = document.getElementById("f-data-retorno").value;
+    updates.data_retorno = dataRetornoInput ? new Date(dataRetornoInput).toISOString() : null;
+  }
+
+  const { error: updErr } = await db.from("clientes").update(updates).eq("id", selectedCliente.id);
+  if (updErr) { console.error(updErr); alert("Erro ao salvar: " + updErr.message); return; }
+
+  const { error: histErr } = await db.from("historico_contatos").insert({
+    cliente_id: selectedCliente.id,
+    status: modalStatus,
+    obs: document.getElementById("f-obs").value || null
+  });
+  if (histErr) { console.error(histErr); }
+
+  if (modalStatus === "concluido") {
+    const resposta = {
+      cliente_id: selectedCliente.id,
+      nome_respondente: document.getElementById("f-nome-respondente").value || null,
+      indicou: modalIndicou,
+      nota: modalNota,
+      motivo: modalMotivos,
+      avaliacao_suporte: document.getElementById("f-suporte").value || null,
+      sugestao: document.getElementById("f-sugestao").value || null,
+      obs_interna: document.getElementById("f-obs").value || null
+    };
+    const { error: respErr } = await db.from("respostas_nps").insert(resposta);
+    if (respErr) { console.error(respErr); alert("Cliente atualizado, mas houve erro ao salvar a resposta: " + respErr.message); }
+    else {
+      const telFuncionou = modalTelefones.find(t => t.funcionou);
+      syncToGoogleSheets({
+        data: new Date().toISOString(),
+        codigo: selectedCliente.codigo || "",
+        razao_social: selectedCliente.nome || "",
+        cnpj_cpf: selectedCliente.cnpj_cpf || "",
+        telefone_usado: telFuncionou ? telFuncionou.numero : "",
+        nome_respondente: resposta.nome_respondente || "",
+        indicou: resposta.indicou || "",
+        nota: resposta.nota,
+        motivo: Array.isArray(resposta.motivo) ? resposta.motivo.join("; ") : (resposta.motivo || ""),
+        avaliacao_suporte: resposta.avaliacao_suporte || "",
+        sugestao: resposta.sugestao || "",
+        obs_interna: resposta.obs_interna || ""
+      });
+    }
+  }
+
+  document.getElementById("overlay").classList.remove("active");
+  await loadData();
+});
+
+// ---------- Dashboard ----------
+function renderDashboard() {
+  const totalRespostas = respostas.length;
+  const totalClientes = clientes.length;
+  const promotores = respostas.filter(r => r.nota >= 9).length;
+  const neutros = respostas.filter(r => r.nota >= 7 && r.nota <= 8).length;
+  const detratores = respostas.filter(r => r.nota <= 6).length;
+  const nps = totalRespostas > 0 ? Math.round(((promotores - detratores) / totalRespostas) * 100) : null;
+
+  document.getElementById("stat-nps").textContent = nps === null ? "—" : nps;
+  document.getElementById("stat-nps-sub").textContent = nps === null ? "sem respostas ainda" : npsLabel(nps);
+  document.getElementById("stat-respostas").textContent = totalRespostas;
+  document.getElementById("stat-respostas-sub").textContent = `de ${totalClientes} clientes ativos`;
+  document.getElementById("stat-faltam").textContent = clientes.filter(c => c.status === "a_ligar" || c.status === "retornar").length;
+  document.getElementById("stat-nao-atendeu").textContent = clientes.filter(c => c.status === "nao_atendeu").length;
+
+  // distribuição de notas 0-10
+  const notasChart = document.getElementById("notas-chart");
+  notasChart.innerHTML = "";
+  const maxCount = Math.max(1, ...Array.from({length:11}, (_, i) => respostas.filter(r => r.nota === i).length));
+  for (let i = 10; i >= 0; i--) {
+    const count = respostas.filter(r => r.nota === i).length;
+    const pct = (count / maxCount) * 100;
+    const color = i >= 9 ? "var(--green)" : i >= 7 ? "var(--amber)" : "var(--red)";
+    const row = document.createElement("div");
+    row.className = "bar-row";
+    row.innerHTML = `
+      <div class="bar-label">${i}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${pct}%; background:${color};"></div></div>
+      <div class="bar-count">${count}</div>
+    `;
+    notasChart.appendChild(row);
+  }
+
+  // categorias
+  const catBox = document.getElementById("categorias-breakdown");
+  catBox.innerHTML = "";
+  [
+    ["Promotores (9-10)", promotores, "var(--green)"],
+    ["Neutros (7-8)", neutros, "var(--amber)"],
+    ["Detratores (0-6)", detratores, "var(--red)"]
+  ].forEach(([label, count, color]) => {
+    const div = document.createElement("div");
+    div.className = "breakdown-item";
+    div.innerHTML = `<span class="breakdown-name" style="color:${color}">${label}</span><span class="breakdown-count">${count}</span>`;
+    catBox.appendChild(div);
+  });
+
+  renderBreakdown("motivo-breakdown", "motivo");
+  renderBreakdown("suporte-breakdown", "avaliacao_suporte");
+  renderRespostasPorDia();
+  renderRespostasPorMes();
+}
+
+function renderRespostasPorDia() {
+  const box = document.getElementById("respostas-por-dia");
+  const dias = [];
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+  for (let i = 13; i >= 0; i--) {
+    const d = new Date(hoje);
+    d.setDate(d.getDate() - i);
+    dias.push(d);
+  }
+  const counts = dias.map(d => {
+    const chave = d.toISOString().slice(0, 10);
+    return respostas.filter(r => (r.data || "").slice(0, 10) === chave).length;
+  });
+  const maxCount = Math.max(1, ...counts);
+
+  box.innerHTML = "";
+  dias.forEach((d, i) => {
+    const count = counts[i];
+    const pct = (count / maxCount) * 100;
+    const label = d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+    const row = document.createElement("div");
+    row.className = "bar-row";
+    row.innerHTML = `
+      <div class="bar-label" style="width:40px;">${label}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${pct}%; background:var(--purple);"></div></div>
+      <div class="bar-count">${count}</div>
+    `;
+    box.appendChild(row);
+  });
+}
+
+function renderRespostasPorMes() {
+  const box = document.getElementById("respostas-por-mes");
+  const meses = [];
+  const hoje = new Date();
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
+    meses.push(d);
+  }
+  const counts = meses.map(m => {
+    return respostas.filter(r => {
+      if (!r.data) return false;
+      const rd = new Date(r.data);
+      return rd.getFullYear() === m.getFullYear() && rd.getMonth() === m.getMonth();
+    }).length;
+  });
+  const maxCount = Math.max(1, ...counts);
+
+  box.innerHTML = "";
+  meses.forEach((m, i) => {
+    const count = counts[i];
+    const pct = (count / maxCount) * 100;
+    const label = m.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }).replace(".", "");
+    const row = document.createElement("div");
+    row.className = "bar-row";
+    row.innerHTML = `
+      <div class="bar-label" style="width:50px; text-transform:capitalize;">${label}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${pct}%; background:var(--green);"></div></div>
+      <div class="bar-count">${count}</div>
+    `;
+    box.appendChild(row);
+  });
+}
+
+function renderBreakdown(elId, field) {
+  const box = document.getElementById(elId);
+  box.innerHTML = "";
+  const counts = {};
+  respostas.forEach(r => {
+    const v = r[field];
+    if (Array.isArray(v)) {
+      if (v.length === 0) { counts["Não informado"] = (counts["Não informado"] || 0) + 1; }
+      else v.forEach(item => { counts[item] = (counts[item] || 0) + 1; });
+    } else {
+      const label = v || "Não informado";
+      counts[label] = (counts[label] || 0) + 1;
+    }
+  });
+  const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  if (entries.length === 0) {
+    box.innerHTML = '<div class="empty">Sem dados ainda.</div>';
+    return;
+  }
+  entries.forEach(([label, count]) => {
+    const div = document.createElement("div");
+    div.className = "breakdown-item";
+    div.innerHTML = `<span class="breakdown-name">${escapeHtml(label)}</span><span class="breakdown-count">${count}</span>`;
+    box.appendChild(div);
+  });
+}
+
+function npsLabel(nps) {
+  if (nps >= 70) return "Excelente";
+  if (nps >= 50) return "Muito bom";
+  if (nps >= 0) return "Razoável";
+  return "Crítico";
+}
+
+function escapeHtml(str) {
+  if (str === null || str === undefined) return "";
+  return String(str).replace(/[&<>"']/g, m => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  }[m]));
+}
+
+// ---------- Inicialização ----------
+if (initSupabase()) {
+  loadData();
+}
+</script>
+</body>
+</html>
