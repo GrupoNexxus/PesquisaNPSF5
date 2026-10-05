@@ -339,6 +339,22 @@
   .hist-item:last-child{border-bottom:none;}
   .hist-item .h-data{color:var(--muted);}
 
+  .dup-item{
+    padding:10px 12px;
+    border-radius:10px;
+    border:1px solid var(--border);
+    background:#fbfaf8;
+    margin-bottom:6px;
+    cursor:pointer;
+  }
+  .dup-item .d-nome{font-size:14px; font-weight:600;}
+  .dup-item .d-info{font-size:11px; color:var(--muted);}
+  .dup-item.selected{
+    border-color:var(--purple);
+    background:var(--purple-light);
+  }
+  .dup-item.disabled{opacity:0.5; cursor:not-allowed;}
+
   /* Modal */
   .overlay{
     display:none;
@@ -468,7 +484,7 @@
       <div class="filter-chip" data-status="sem_sucesso">Sem sucesso</div>
       <div class="filter-chip" data-status="recusou">Recusou</div>
       <div class="filter-chip" data-status="enviado_whatsapp">Enviado WhatsApp</div>
-      <div class="filter-chip" data-status="concluido">Concluído</div>
+      <div class="filter-chip" data-status="concluido">Pesquisa realizada</div>
     </div>
     <div class="card">
       <table>
@@ -532,6 +548,7 @@
             <th>Motivo</th>
             <th>Suporte</th>
             <th>Comentário</th>
+            <th>Ações</th>
           </tr>
         </thead>
         <tbody id="respostas-body"></tbody>
@@ -589,7 +606,14 @@
 
     <div class="dash-row">
       <div class="card panel">
-        <h3>Respostas por dia <span style="font-weight:400; color:var(--muted); font-size:12px;">— últimos 14 dias</span></h3>
+        <h3>Respostas por dia</h3>
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:14px;">
+          <label for="dia-de" style="font-size:12px; font-weight:700; color:var(--muted);">De</label>
+          <input type="date" id="dia-de" style="padding:7px 10px; border-radius:8px; border:1px solid var(--border); font-family:'Inter',sans-serif; font-size:13px; background:#fbfaf8;">
+          <label for="dia-ate" style="font-size:12px; font-weight:700; color:var(--muted);">Até</label>
+          <input type="date" id="dia-ate" style="padding:7px 10px; border-radius:8px; border:1px solid var(--border); font-family:'Inter',sans-serif; font-size:13px; background:#fbfaf8;">
+          <span id="dia-total" style="margin-left:auto; font-size:12px; font-weight:700; color:var(--muted);"></span>
+        </div>
         <div id="respostas-por-dia"></div>
       </div>
       <div class="card panel">
@@ -625,6 +649,21 @@
       <div class="card" style="padding:4px 14px; max-height:140px; overflow-y:auto;" id="historico-list"></div>
     </div>
 
+    <!-- Estado: pesquisa já realizada -->
+    <div id="bloco-realizada" class="hidden">
+      <div class="card" style="padding:16px 18px; margin-bottom:16px; border-color:var(--purple); background:var(--purple-light);">
+        <div style="font-family:'Sora',sans-serif; font-weight:700; font-size:15px; color:var(--purple); margin-bottom:8px;">Pesquisa realizada</div>
+        <div id="realizada-detalhes" style="font-size:13px; line-height:1.7;"></div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="btn-fechar-realizada">Fechar</button>
+        <button class="btn btn-primary" id="btn-reabrir">Reabrir pesquisa</button>
+      </div>
+    </div>
+
+    <div id="modal-form-area">
+    <div id="aviso-reabrir" class="hidden" style="background:var(--amber-light); color:var(--amber); border-radius:10px; padding:10px 14px; font-size:13px; font-weight:600; margin-bottom:16px;">Pesquisa reaberta. Ao salvar, a resposta anterior será substituída.</div>
+
     <div class="field">
       <label>Números de telefone <span style="font-weight:400; color:var(--muted);">— marque o que deu certo</span></label>
       <div id="telefones-list"></div>
@@ -634,7 +673,7 @@
       </div>
     </div>
 
-    <div class="field">
+    <div class="field" id="field-resultado">
       <label>Resultado da ligação</label>
       <div class="status-options">
         <div class="pill" data-status="concluido">Respondeu a pesquisa</div>
@@ -718,6 +757,27 @@
       <button class="btn btn-ghost" id="btn-cancelar">Cancelar</button>
       <button class="btn btn-primary" id="btn-salvar">Salvar</button>
     </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL DE DUPLICAR RESPOSTA ===== -->
+<div class="overlay" id="overlay-dup">
+  <div class="modal" style="max-width:480px;">
+    <h2>Duplicar resposta</h2>
+    <div class="sub" id="dup-origem-sub"></div>
+
+    <div class="field">
+      <label>Aplicar essa mesma resposta para qual cliente?</label>
+      <input type="text" id="dup-search" placeholder="Buscar por nome ou código..." style="width:100%; padding:10px 12px; border-radius:10px; border:1px solid var(--border); font-family:'Inter',sans-serif; font-size:14px; background:#fbfaf8;">
+    </div>
+
+    <div id="dup-lista" style="max-height:260px; overflow-y:auto; margin-bottom:8px;"></div>
+
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="btn-dup-cancelar">Cancelar</button>
+      <button class="btn btn-primary" id="btn-dup-confirmar" disabled>Duplicar para o cliente selecionado</button>
+    </div>
   </div>
 </div>
 
@@ -747,6 +807,11 @@ let currentComentarioCat = "bons";
 let currentSearchRespostas = "";
 let currentAgendaFilter = "todos";
 let modalTelefones = [];
+let reabrindoResposta = null;
+
+function respostaDoCliente(clienteId) {
+  return respostas.find(r => r.cliente_id === clienteId) || null;
+}
 
 function melhorNumero(c) {
   if (Array.isArray(c.telefones)) {
@@ -886,7 +951,7 @@ document.querySelectorAll("#view-fila .filter-chip").forEach(chip => {
 
 const STATUS_LABEL = {
   a_ligar: "A ligar",
-  concluido: "Concluído",
+  concluido: "Pesquisa realizada",
   retornar: "Retornar",
   nao_atendeu: "Não atendeu",
   sem_sucesso: "Ligação sem sucesso",
@@ -1043,13 +1108,21 @@ function renderRespostas() {
     tr.innerHTML = `
       <td><strong>${escapeHtml(nomeCliente)}</strong></td>
       <td>${escapeHtml(r.nome_respondente || "—")}</td>
-      <td>${new Date(r.data).toLocaleDateString("pt-BR")}</td>
+      <td>
+        ${new Date(r.data).toLocaleDateString("pt-BR")} ${new Date(r.data).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+        ${r.duplicada_de_cliente ? `<br><span class="badge retornar" style="margin-top:4px;" title="Duplicada de: ${escapeHtml(r.duplicada_de_cliente)}">Duplicada</span>` : ""}
+      </td>
       <td><span style="color:${notaColor}; font-weight:700;">${r.nota}</span></td>
       <td>${escapeHtml(r.indicou || "—")}</td>
       <td>${escapeHtml(Array.isArray(r.motivo) ? r.motivo.join(", ") : (r.motivo || "—"))}</td>
       <td>${escapeHtml(r.avaliacao_suporte || "—")}</td>
       <td>${escapeHtml(r.sugestao || "—")}</td>
+      <td><button type="button" class="tel-copy dup-btn">Duplicar</button></td>
     `;
+    tr.querySelector(".dup-btn").addEventListener("click", (e) => {
+      e.stopPropagation();
+      abrirDuplicarResposta(r);
+    });
     tbody.appendChild(tr);
   });
 }
@@ -1084,7 +1157,9 @@ function exportarRespostasXLS() {
         "Motivo": Array.isArray(r.motivo) ? r.motivo.join("; ") : (r.motivo || ""),
         "Avaliação do suporte": r.avaliacao_suporte || "",
         "Se você pudesse mudar ou melhorar algo no nosso atendimento ou serviço, o que seria?": r.sugestao || "",
-        "Observação interna": r.obs_interna || ""
+        "Observação interna": r.obs_interna || "",
+        "Duplicada?": r.duplicada_de_cliente ? "Sim" : "Não",
+        "Duplicada de": r.duplicada_de_cliente || ""
       };
     });
 
@@ -1101,7 +1176,9 @@ function exportarRespostasXLS() {
     { wch: 45 }, // Motivo
     { wch: 18 }, // Avaliação do suporte
     { wch: 55 }, // pergunta de melhoria
-    { wch: 30 }  // Observação interna
+    { wch: 30 }, // Observação interna
+    { wch: 12 }, // Duplicada?
+    { wch: 34 }  // Duplicada de
   ];
 
   const wb = XLSX.utils.book_new();
@@ -1113,6 +1190,155 @@ function exportarRespostasXLS() {
 }
 
 document.getElementById("btn-exportar-xls").addEventListener("click", exportarRespostasXLS);
+
+// ---------- Duplicar resposta para outro cliente ----------
+let duplicandoResposta = null;
+let duplicandoOrigemNome = "";
+let dupClienteSelecionado = null;
+let dupSearch = "";
+
+function abrirDuplicarResposta(resposta) {
+  duplicandoResposta = resposta;
+  dupClienteSelecionado = null;
+  dupSearch = "";
+  document.getElementById("dup-search").value = "";
+
+  const clientesById = Object.fromEntries(clientes.map(c => [c.id, c]));
+  const origemCliente = clientesById[resposta.cliente_id];
+  duplicandoOrigemNome = origemCliente ? nomeComCodigo(origemCliente) : "cliente não encontrado";
+  document.getElementById("dup-origem-sub").textContent =
+    `Resposta de ${duplicandoOrigemNome} (nota ${resposta.nota}) será copiada para outro cliente.`;
+
+  document.getElementById("btn-dup-confirmar").disabled = true;
+  renderDupLista();
+  document.getElementById("overlay-dup").classList.add("active");
+}
+
+function renderDupLista() {
+  const box = document.getElementById("dup-lista");
+  const termo = dupSearch.toLowerCase();
+
+  let opcoes = clientes.filter(c => c.id !== duplicandoResposta.cliente_id);
+  if (termo) {
+    opcoes = opcoes.filter(c =>
+      (c.nome || "").toLowerCase().includes(termo)
+      || (c.nome_fantasia || "").toLowerCase().includes(termo)
+      || String(c.codigo || "").toLowerCase().includes(termo)
+    );
+  }
+  // clientes que ainda não responderam aparecem primeiro
+  opcoes.sort((a, b) => (respostaDoCliente(a.id) ? 1 : 0) - (respostaDoCliente(b.id) ? 1 : 0));
+  opcoes = opcoes.slice(0, 30);
+
+  box.innerHTML = "";
+  if (opcoes.length === 0) {
+    box.innerHTML = '<div class="empty" style="padding:16px;">Nenhum cliente encontrado.</div>';
+    return;
+  }
+
+  opcoes.forEach(c => {
+    const jaRespondeu = !!respostaDoCliente(c.id);
+    const div = document.createElement("div");
+    div.className = "dup-item"
+      + (dupClienteSelecionado && dupClienteSelecionado.id === c.id ? " selected" : "")
+      + (jaRespondeu ? " disabled" : "");
+    div.innerHTML = `
+      <div class="d-nome">${escapeHtml(nomeComCodigo(c))}</div>
+      <div class="d-info">${escapeHtml(c.cnpj_cpf || "")}${c.municipio ? " · " + escapeHtml(c.municipio) : ""}${jaRespondeu ? " · Pesquisa já realizada" : ""}</div>
+    `;
+    if (!jaRespondeu) {
+      div.addEventListener("click", () => {
+        dupClienteSelecionado = c;
+        document.getElementById("btn-dup-confirmar").disabled = false;
+        renderDupLista();
+      });
+    }
+    box.appendChild(div);
+  });
+}
+
+document.getElementById("dup-search").addEventListener("input", (e) => {
+  dupSearch = e.target.value;
+  renderDupLista();
+});
+
+document.getElementById("btn-dup-cancelar").addEventListener("click", () => {
+  document.getElementById("overlay-dup").classList.remove("active");
+});
+
+document.getElementById("btn-dup-confirmar").addEventListener("click", async () => {
+  if (!dupClienteSelecionado || !duplicandoResposta) return;
+  if (!db) { showError("Sem conexão com o banco de dados. Recarregue a página."); return; }
+
+  if (respostaDoCliente(dupClienteSelecionado.id)) {
+    alert("Esse cliente já tem pesquisa realizada. Reabra a pesquisa dele para substituir a resposta.");
+    return;
+  }
+
+  const btn = document.getElementById("btn-dup-confirmar");
+  btn.disabled = true;
+  btn.textContent = "Duplicando...";
+
+  const cliente = dupClienteSelecionado;
+  const origem = duplicandoResposta;
+
+  const novaResposta = {
+    cliente_id: cliente.id,
+    nome_respondente: origem.nome_respondente || null,
+    indicou: origem.indicou || null,
+    nota: origem.nota,
+    motivo: Array.isArray(origem.motivo) ? origem.motivo : [],
+    avaliacao_suporte: origem.avaliacao_suporte || null,
+    sugestao: origem.sugestao || null,
+    obs_interna: origem.obs_interna || null,
+    duplicada_de_resposta_id: origem.id || null,
+    duplicada_de_cliente: duplicandoOrigemNome || null
+  };
+
+  const { error: respErr } = await db.from("respostas_nps").insert(novaResposta);
+  if (respErr) {
+    console.error(respErr);
+    alert("Erro ao duplicar a resposta: " + respErr.message);
+    btn.disabled = false;
+    btn.textContent = "Duplicar para o cliente selecionado";
+    return;
+  }
+
+  const updates = {
+    status: "concluido",
+    data_contato: new Date().toISOString(),
+    tentativas: (cliente.tentativas || 0) + 1
+  };
+  const { error: updErr } = await db.from("clientes").update(updates).eq("id", cliente.id);
+  if (updErr) console.error(updErr);
+
+  const { error: histErr } = await db.from("historico_contatos").insert({
+    cliente_id: cliente.id,
+    status: "concluido",
+    obs: "Resposta duplicada de outro CNPJ do mesmo grupo."
+  });
+  if (histErr) console.error(histErr);
+
+  const telFuncionou = Array.isArray(cliente.telefones) ? cliente.telefones.find(t => t.funcionou) : null;
+  syncToGoogleSheets({
+    data: new Date().toISOString(),
+    codigo: cliente.codigo || "",
+    razao_social: cliente.nome || "",
+    cnpj_cpf: cliente.cnpj_cpf || "",
+    telefone_usado: telFuncionou ? telFuncionou.numero : "",
+    nome_respondente: novaResposta.nome_respondente || "",
+    indicou: novaResposta.indicou || "",
+    nota: novaResposta.nota,
+    motivo: Array.isArray(novaResposta.motivo) ? novaResposta.motivo.join("; ") : "",
+    avaliacao_suporte: novaResposta.avaliacao_suporte || "",
+    sugestao: novaResposta.sugestao || "",
+    obs_interna: novaResposta.obs_interna || ""
+  });
+
+  btn.textContent = "Duplicar para o cliente selecionado";
+  document.getElementById("overlay-dup").classList.remove("active");
+  await loadData();
+});
 document.querySelectorAll("#comentarios-tabs .pill").forEach(pill => {
   pill.addEventListener("click", () => {
     document.querySelectorAll("#comentarios-tabs .pill").forEach(p => p.classList.remove("selected"));
@@ -1261,8 +1487,58 @@ function renderHistoricoModal(clienteId) {
   });
 }
 
+function mostrarPesquisaRealizada(r) {
+  document.getElementById("modal-form-area").classList.add("hidden");
+  document.getElementById("bloco-realizada").classList.remove("hidden");
+  const motivos = Array.isArray(r.motivo) ? r.motivo.join(", ") : (r.motivo || "");
+  const dt = new Date(r.data);
+  const linhas = [
+    ["Respondente", r.nome_respondente || "Não informado"],
+    ["Data", dt.toLocaleDateString("pt-BR") + " " + dt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })],
+    ["Nota", String(r.nota)],
+    ["Motivo", motivos || "Não informado"],
+    ["Suporte", r.avaliacao_suporte || "Não informado"]
+  ];
+  if (r.duplicada_de_cliente) linhas.push(["Duplicada de", r.duplicada_de_cliente]);
+  document.getElementById("realizada-detalhes").innerHTML =
+    linhas.map(([k, v]) => `<div><strong>${k}:</strong> ${escapeHtml(v)}</div>`).join("");
+}
+
+document.getElementById("btn-fechar-realizada").addEventListener("click", () => {
+  document.getElementById("overlay").classList.remove("active");
+});
+
+document.getElementById("btn-reabrir").addEventListener("click", () => {
+  const r = selectedCliente ? respostaDoCliente(selectedCliente.id) : null;
+  if (!r) return;
+  reabrindoResposta = r;
+
+  document.getElementById("bloco-realizada").classList.add("hidden");
+  document.getElementById("modal-form-area").classList.remove("hidden");
+  document.getElementById("field-resultado").classList.add("hidden");
+  document.getElementById("aviso-reabrir").classList.remove("hidden");
+  document.getElementById("bloco-retornar").classList.add("hidden");
+
+  // reabrir significa registrar de novo a pesquisa, então o resultado é sempre "respondeu"
+  modalStatus = "concluido";
+  document.getElementById("bloco-pesquisa").classList.remove("hidden");
+
+  // pré-preenche com a resposta anterior para facilitar a correção
+  document.getElementById("f-nome-respondente").value = r.nome_respondente || "";
+  modalIndicou = r.indicou || null;
+  document.querySelectorAll("#f-indicou .pill").forEach(p => p.classList.toggle("selected", p.dataset.value === modalIndicou));
+  modalNota = r.nota;
+  document.querySelectorAll(".nota-pill").forEach(p => p.classList.toggle("selected", parseInt(p.dataset.value, 10) === modalNota));
+  modalMotivos = Array.isArray(r.motivo) ? [...r.motivo] : [];
+  document.querySelectorAll("#f-motivo .pill").forEach(p => p.classList.toggle("selected", modalMotivos.includes(p.dataset.value)));
+  document.getElementById("f-suporte").value = r.avaliacao_suporte || "";
+  document.getElementById("f-sugestao").value = r.sugestao || "";
+  document.getElementById("f-obs").value = r.obs_interna || "";
+});
+
 function openModal(cliente) {
   selectedCliente = cliente;
+  reabrindoResposta = null;
   modalStatus = null; modalIndicou = null; modalNota = null; modalMotivos = [];
 
   document.getElementById("modal-nome").textContent = nomeComCodigo(cliente);
@@ -1289,6 +1565,17 @@ function openModal(cliente) {
     if (retornarPill) retornarPill.classList.add("selected");
     document.getElementById("bloco-retornar").classList.remove("hidden");
     document.getElementById("f-data-retorno").value = toDatetimeLocalValue(cliente.data_retorno);
+  }
+
+  // estado do modal: formulário normal ou pesquisa já realizada (fechada)
+  document.getElementById("aviso-reabrir").classList.add("hidden");
+  document.getElementById("field-resultado").classList.remove("hidden");
+  const jaRespondeu = respostaDoCliente(cliente.id);
+  if (jaRespondeu) {
+    mostrarPesquisaRealizada(jaRespondeu);
+  } else {
+    document.getElementById("bloco-realizada").classList.add("hidden");
+    document.getElementById("modal-form-area").classList.remove("hidden");
   }
 
   document.getElementById("overlay").classList.add("active");
@@ -1385,7 +1672,7 @@ document.getElementById("btn-salvar").addEventListener("click", async () => {
   const { error: histErr } = await db.from("historico_contatos").insert({
     cliente_id: selectedCliente.id,
     status: modalStatus,
-    obs: document.getElementById("f-obs").value || null
+    obs: document.getElementById("f-obs").value || (reabrindoResposta ? "Pesquisa reaberta e resposta substituída." : null)
   });
   if (histErr) { console.error(histErr); }
 
@@ -1400,11 +1687,24 @@ document.getElementById("btn-salvar").addEventListener("click", async () => {
       sugestao: document.getElementById("f-sugestao").value || null,
       obs_interna: document.getElementById("f-obs").value || null
     };
-    const { error: respErr } = await db.from("respostas_nps").insert(resposta);
+    // regra: só uma resposta por cliente. Se já existe, a nova substitui a antiga.
+    const existente = respostaDoCliente(selectedCliente.id);
+    let respErr;
+    if (existente) {
+      ({ error: respErr } = await db.from("respostas_nps").update({
+        ...resposta,
+        data: new Date().toISOString(),
+        duplicada_de_resposta_id: null,
+        duplicada_de_cliente: null
+      }).eq("id", existente.id));
+    } else {
+      ({ error: respErr } = await db.from("respostas_nps").insert(resposta));
+    }
     if (respErr) { console.error(respErr); alert("Cliente atualizado, mas houve erro ao salvar a resposta: " + respErr.message); }
     else {
       const telFuncionou = modalTelefones.find(t => t.funcionou);
       syncToGoogleSheets({
+        substituir: !!existente,
         data: new Date().toISOString(),
         codigo: selectedCliente.codigo || "",
         razao_social: selectedCliente.nome || "",
@@ -1479,20 +1779,53 @@ function renderDashboard() {
   renderRespostasPorMes();
 }
 
+document.getElementById("dia-de").addEventListener("change", () => renderRespostasPorDia());
+document.getElementById("dia-ate").addEventListener("change", () => renderRespostasPorDia());
+
+function chaveDiaLocal(d) {
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 function renderRespostasPorDia() {
   const box = document.getElementById("respostas-por-dia");
-  const dias = [];
+  const inDe = document.getElementById("dia-de");
+  const inAte = document.getElementById("dia-ate");
+
+  // padrão: últimos 14 dias
   const hoje = new Date();
   hoje.setHours(0, 0, 0, 0);
-  for (let i = 13; i >= 0; i--) {
-    const d = new Date(hoje);
-    d.setDate(d.getDate() - i);
-    dias.push(d);
+  if (!inAte.value) inAte.value = chaveDiaLocal(hoje);
+  if (!inDe.value) {
+    const ini = new Date(hoje);
+    ini.setDate(ini.getDate() - 13);
+    inDe.value = chaveDiaLocal(ini);
   }
+
+  let de = new Date(inDe.value + "T00:00:00");
+  let ate = new Date(inAte.value + "T00:00:00");
+  if (de > ate) {
+    const t = de; de = ate; ate = t;
+    inDe.value = chaveDiaLocal(de);
+    inAte.value = chaveDiaLocal(ate);
+  }
+
+  const MAX_DIAS = 92;
+  const limite = new Date(ate);
+  limite.setDate(limite.getDate() - (MAX_DIAS - 1));
+  let limitado = false;
+  if (de < limite) { de = limite; limitado = true; }
+
+  const dias = [];
+  for (let d = new Date(de); d <= ate; d.setDate(d.getDate() + 1)) dias.push(new Date(d));
+
   const counts = dias.map(d => {
-    const chave = d.toISOString().slice(0, 10);
-    return respostas.filter(r => (r.data || "").slice(0, 10) === chave).length;
+    const chave = chaveDiaLocal(d);
+    return respostas.filter(r => r.data && chaveDiaLocal(new Date(r.data)) === chave).length;
   });
+  const total = counts.reduce((a, b) => a + b, 0);
+  document.getElementById("dia-total").textContent =
+    `Total no período: ${total}` + (limitado ? ` (mostrando no máximo ${MAX_DIAS} dias)` : "");
   const maxCount = Math.max(1, ...counts);
 
   box.innerHTML = "";
