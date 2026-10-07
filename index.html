@@ -354,6 +354,9 @@
     background:var(--purple-light);
   }
   .dup-item.disabled{opacity:0.5; cursor:not-allowed;}
+  .grupo-detalhe td{background:#fbfaf8; font-size:13px;}
+  .grupo-detalhe .gm{display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid var(--border);}
+  .grupo-detalhe .gm:last-child{border-bottom:none;}
 
   /* Modal */
   .overlay{
@@ -465,6 +468,7 @@
     <button class="tab-btn active" data-view="fila">Fila de ligação</button>
     <button class="tab-btn" data-view="agenda">Agenda</button>
     <button class="tab-btn" data-view="respostas">Respostas</button>
+    <button class="tab-btn" data-view="grupos">Grupos</button>
     <button class="tab-btn" data-view="dashboard">Dashboard</button>
   </nav>
 </header>
@@ -476,7 +480,7 @@
   <!-- ===== FILA DE LIGAÇÃO ===== -->
   <section id="view-fila" class="view active">
     <div class="toolbar">
-      <input type="text" id="search" placeholder="Buscar por nome ou código...">
+      <input type="text" id="search" placeholder="Buscar por nome, código ou grupo...">
       <div class="filter-chip active" data-status="todos">Todos</div>
       <div class="filter-chip" data-status="a_ligar">A ligar</div>
       <div class="filter-chip" data-status="retornar">Retornar</div>
@@ -554,6 +558,30 @@
         <tbody id="respostas-body"></tbody>
       </table>
       <div id="respostas-empty" class="empty hidden">Nenhuma resposta registrada ainda.</div>
+    </div>
+  </section>
+
+  <!-- ===== GRUPOS ===== -->
+  <section id="view-grupos" class="view">
+    <div id="grupos-resumo" style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:18px;"></div>
+    <div class="toolbar">
+      <input type="text" id="search-grupos" placeholder="Buscar grupo...">
+    </div>
+    <div class="card">
+      <table>
+        <thead>
+          <tr>
+            <th>Grupo</th>
+            <th>Empresas</th>
+            <th>Com pesquisa</th>
+            <th>Pendentes</th>
+            <th>Situação</th>
+            <th>Ações</th>
+          </tr>
+        </thead>
+        <tbody id="grupos-body"></tbody>
+      </table>
+      <div id="grupos-empty" class="empty hidden">Nenhum grupo cadastrado ainda. Rode o SQL de grupos no Supabase (arquivo grupos_f5.sql).</div>
     </div>
   </section>
 
@@ -643,6 +671,7 @@
   <div class="modal">
     <h2 id="modal-nome">Cliente</h2>
     <div class="sub" id="modal-sub"></div>
+    <div id="modal-grupo" class="hidden" style="background:var(--purple-light); color:var(--purple); border-radius:10px; padding:8px 12px; font-size:12px; font-weight:700; margin:-8px 0 16px 0;"></div>
 
     <div class="field" id="historico-wrapper" style="display:none;">
       <label>Tentativas de contato anteriores</label>
@@ -769,7 +798,7 @@
 
     <div class="field">
       <label>Aplicar essa mesma resposta para qual cliente?</label>
-      <input type="text" id="dup-search" placeholder="Buscar por nome ou código..." style="width:100%; padding:10px 12px; border-radius:10px; border:1px solid var(--border); font-family:'Inter',sans-serif; font-size:14px; background:#fbfaf8;">
+      <input type="text" id="dup-search" placeholder="Buscar por nome, código ou grupo..." style="width:100%; padding:10px 12px; border-radius:10px; border:1px solid var(--border); font-family:'Inter',sans-serif; font-size:14px; background:#fbfaf8;">
     </div>
 
     <div id="dup-lista" style="max-height:260px; overflow-y:auto; margin-bottom:8px;"></div>
@@ -777,6 +806,26 @@
     <div class="modal-actions">
       <button class="btn btn-ghost" id="btn-dup-cancelar">Cancelar</button>
       <button class="btn btn-primary" id="btn-dup-confirmar" disabled>Duplicar para o cliente selecionado</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL DE APLICAR AO GRUPO ===== -->
+<div class="overlay" id="overlay-grupo">
+  <div class="modal" style="max-width:520px;">
+    <h2 id="grupo-titulo">Aplicar resposta ao grupo</h2>
+    <div class="sub" id="grupo-sub"></div>
+    <div class="field">
+      <label>Resposta que será copiada</label>
+      <select id="grupo-base"></select>
+    </div>
+    <div class="field">
+      <label>Empresas que receberão a resposta</label>
+      <div id="grupo-lista" style="max-height:240px; overflow-y:auto;"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="btn-grupo-cancelar">Agora não</button>
+      <button class="btn btn-primary" id="btn-grupo-aplicar">Aplicar ao grupo</button>
     </div>
   </div>
 </div>
@@ -811,6 +860,20 @@ let reabrindoResposta = null;
 
 function respostaDoCliente(clienteId) {
   return respostas.find(r => r.cliente_id === clienteId) || null;
+}
+
+function membrosDoGrupo(nomeGrupo) {
+  return clientes.filter(c => c.grupo_empresarial === nomeGrupo);
+}
+
+function grupoStats(nomeGrupo) {
+  const membros = membrosDoGrupo(nomeGrupo);
+  const com = membros.filter(c => respostaDoCliente(c.id)).length;
+  return { membros, total: membros.length, com, pend: membros.length - com };
+}
+
+function nomesDeGrupos() {
+  return [...new Set(clientes.map(c => c.grupo_empresarial).filter(Boolean))].sort();
 }
 
 function melhorNumero(c) {
@@ -866,6 +929,7 @@ document.querySelectorAll(".tab-btn").forEach(btn => {
     if (btn.dataset.view === "dashboard") { renderDashboard(); renderComentarios(currentComentarioCat); }
     if (btn.dataset.view === "agenda") renderAgenda();
     if (btn.dataset.view === "respostas") renderRespostas();
+    if (btn.dataset.view === "grupos") renderGrupos();
   });
 });
 
@@ -924,6 +988,7 @@ async function loadData() {
     renderFila();
     renderAgenda();
     renderRespostas();
+    renderGrupos();
     if (document.getElementById("view-dashboard").classList.contains("active")) {
       renderDashboard();
       renderComentarios(currentComentarioCat);
@@ -965,6 +1030,7 @@ function renderFila() {
     const matchSearch = !currentSearch
       || (c.nome || "").toLowerCase().includes(currentSearch)
       || (c.nome_fantasia || "").toLowerCase().includes(currentSearch)
+      || (c.grupo_empresarial || "").toLowerCase().includes(currentSearch)
       || String(c.codigo || "").toLowerCase().includes(currentSearch);
     return matchStatus && matchSearch;
   });
@@ -985,7 +1051,7 @@ function renderFila() {
   list.forEach(c => {
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td><strong>${escapeHtml(nomeComCodigo(c))}</strong></td>
+      <td><strong>${escapeHtml(nomeComCodigo(c))}</strong>${c.grupo_empresarial ? `<br><span class="badge" style="margin-top:4px; background:var(--purple-light); color:var(--purple);">${escapeHtml(c.grupo_empresarial)}</span>` : ""}</td>
       <td>${escapeHtml([c.municipio, c.uf].filter(Boolean).join("/"))}</td>
       <td>${escapeHtml(melhorNumero(c))}${melhorNumero(c) !== "—" ? '<button type="button" class="copy-icon-btn" title="Copiar número">⧉</button>' : ""}</td>
       <td><span class="badge ${c.status}">${STATUS_LABEL[c.status] || c.status}</span></td>
@@ -1051,7 +1117,7 @@ function renderAgenda() {
   list.forEach(c => {
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td><strong>${escapeHtml(nomeComCodigo(c))}</strong></td>
+      <td><strong>${escapeHtml(nomeComCodigo(c))}</strong>${c.grupo_empresarial ? `<br><span class="badge" style="margin-top:4px; background:var(--purple-light); color:var(--purple);">${escapeHtml(c.grupo_empresarial)}</span>` : ""}</td>
       <td>${escapeHtml([c.municipio, c.uf].filter(Boolean).join("/"))}</td>
       <td>${escapeHtml(melhorNumero(c))}${melhorNumero(c) !== "—" ? '<button type="button" class="copy-icon-btn" title="Copiar número">⧉</button>' : ""}</td>
       <td>${c._dr.toLocaleDateString("pt-BR")} às ${c._dr.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</td>
@@ -1159,7 +1225,8 @@ function exportarRespostasXLS() {
         "Se você pudesse mudar ou melhorar algo no nosso atendimento ou serviço, o que seria?": r.sugestao || "",
         "Observação interna": r.obs_interna || "",
         "Duplicada?": r.duplicada_de_cliente ? "Sim" : "Não",
-        "Duplicada de": r.duplicada_de_cliente || ""
+        "Duplicada de": r.duplicada_de_cliente || "",
+        "Grupo": cliente ? (cliente.grupo_empresarial || "") : ""
       };
     });
 
@@ -1178,7 +1245,8 @@ function exportarRespostasXLS() {
     { wch: 55 }, // pergunta de melhoria
     { wch: 30 }, // Observação interna
     { wch: 12 }, // Duplicada?
-    { wch: 34 }  // Duplicada de
+    { wch: 34 }, // Duplicada de
+    { wch: 22 }  // Grupo
   ];
 
   const wb = XLSX.utils.book_new();
@@ -1339,6 +1407,210 @@ document.getElementById("btn-dup-confirmar").addEventListener("click", async () 
   document.getElementById("overlay-dup").classList.remove("active");
   await loadData();
 });
+// ---------- Grupos de empresas ----------
+let grupoAplicacao = null;
+let searchGrupos = "";
+const gruposExpandidos = new Set();
+
+document.getElementById("search-grupos").addEventListener("input", (e) => {
+  searchGrupos = e.target.value.toLowerCase();
+  renderGrupos();
+});
+
+function renderGrupos() {
+  const stats = nomesDeGrupos().map(nome => ({ nome, ...grupoStats(nome) }));
+  const completos = stats.filter(s => s.pend === 0).length;
+  const parciais = stats.filter(s => s.com > 0 && s.pend > 0).length;
+  const sem = stats.filter(s => s.com === 0).length;
+  const empresas = stats.reduce((a, s) => a + s.total, 0);
+  const comPesquisa = stats.reduce((a, s) => a + s.com, 0);
+
+  const cards = [
+    ["Grupos", stats.length],
+    ["Completos", completos],
+    ["Parciais", parciais],
+    ["Sem resposta", sem],
+    ["Empresas com pesquisa", `${comPesquisa} de ${empresas}`]
+  ];
+  document.getElementById("grupos-resumo").innerHTML = cards.map(([l, v]) =>
+    `<div class="card stat-card" style="flex:1; min-width:150px; padding:16px;"><div class="stat-label">${l}</div><div class="stat-value" style="font-size:24px;">${v}</div></div>`
+  ).join("");
+
+  const tbody = document.getElementById("grupos-body");
+  const empty = document.getElementById("grupos-empty");
+  tbody.innerHTML = "";
+
+  const visiveis = stats
+    .filter(s => !searchGrupos || s.nome.toLowerCase().includes(searchGrupos))
+    .sort((a, b) => b.total - a.total || a.nome.localeCompare(b.nome));
+
+  if (visiveis.length === 0) {
+    empty.classList.remove("hidden");
+    return;
+  }
+  empty.classList.add("hidden");
+
+  visiveis.forEach(s => {
+    const situacao = s.pend === 0 ? ["concluido", "Completo"] : (s.com > 0 ? ["a_ligar", "Parcial"] : ["recusou", "Sem resposta"]);
+    const podeAplicar = s.com > 0 && s.pend > 0;
+    const aberto = gruposExpandidos.has(s.nome);
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><strong>${escapeHtml(s.nome)}</strong> <span style="color:var(--muted); font-size:12px;">${aberto ? "▾" : "▸"}</span></td>
+      <td>${s.total}</td>
+      <td>${s.com}</td>
+      <td>${s.pend}</td>
+      <td><span class="badge ${situacao[0]}">${situacao[1]}</span></td>
+      <td>${podeAplicar ? '<button type="button" class="tel-copy grp-apply">Aplicar ao grupo</button>' : ""}</td>
+    `;
+    tr.addEventListener("click", () => {
+      if (gruposExpandidos.has(s.nome)) gruposExpandidos.delete(s.nome); else gruposExpandidos.add(s.nome);
+      renderGrupos();
+    });
+    const btn = tr.querySelector(".grp-apply");
+    if (btn) btn.addEventListener("click", (e) => { e.stopPropagation(); abrirAplicarGrupo(s.nome); });
+    tbody.appendChild(tr);
+
+    if (aberto) {
+      const det = document.createElement("tr");
+      det.className = "grupo-detalhe";
+      const linhas = s.membros.map(c => {
+        const r = respostaDoCliente(c.id);
+        const rotulo = r ? ("Pesquisa realizada" + (r.duplicada_de_cliente ? " (duplicada)" : "")) : (STATUS_LABEL[c.status] || c.status);
+        const cls = r ? "concluido" : c.status;
+        return `<div class="gm"><span>${escapeHtml(nomeComCodigo(c))}</span><span class="badge ${cls}">${escapeHtml(rotulo)}</span></div>`;
+      }).join("");
+      det.innerHTML = `<td colspan="6">${linhas}</td>`;
+      tbody.appendChild(det);
+    }
+  });
+}
+
+function candidatosBase(nomeGrupo) {
+  const ids = new Set(membrosDoGrupo(nomeGrupo).map(c => c.id));
+  const doGrupo = respostas.filter(r => ids.has(r.cliente_id));
+  const originais = doGrupo.filter(r => !r.duplicada_de_cliente);
+  const lista = originais.length ? originais : doGrupo;
+  return [...lista].sort((a, b) => new Date(b.data) - new Date(a.data));
+}
+
+function abrirAplicarGrupo(nomeGrupo, opts = {}) {
+  const st = grupoStats(nomeGrupo);
+  const pendentes = st.membros.filter(c => !respostaDoCliente(c.id));
+  const candidatos = candidatosBase(nomeGrupo);
+  if (pendentes.length === 0 || candidatos.length === 0) return false;
+
+  grupoAplicacao = { nome: nomeGrupo, candidatos, pendentes };
+  const clientesById = Object.fromEntries(clientes.map(c => [c.id, c]));
+
+  document.getElementById("grupo-titulo").textContent = `Aplicar resposta ao grupo ${nomeGrupo}`;
+  document.getElementById("grupo-sub").textContent = opts.aposSalvar
+    ? `Resposta salva. Deseja aplicar a mesma resposta às outras empresas do grupo que ainda não têm pesquisa?`
+    : `A resposta escolhida será copiada para as empresas do grupo que ainda não têm pesquisa.`;
+
+  document.getElementById("grupo-base").innerHTML = candidatos.map((r, i) => {
+    const cli = clientesById[r.cliente_id];
+    return `<option value="${i}">${escapeHtml(cli ? nomeComCodigo(cli) : "cliente não encontrado")} (nota ${r.nota}, ${escapeHtml(r.nome_respondente || "sem nome")})</option>`;
+  }).join("");
+
+  document.getElementById("grupo-lista").innerHTML = pendentes.map(c =>
+    `<div class="dup-item" style="cursor:default;"><div class="d-nome">${escapeHtml(nomeComCodigo(c))}</div><div class="d-info">${escapeHtml(c.cnpj_cpf || "")}${c.municipio ? " · " + escapeHtml(c.municipio) : ""}</div></div>`
+  ).join("");
+
+  const btn = document.getElementById("btn-grupo-aplicar");
+  btn.disabled = false;
+  btn.textContent = pendentes.length === 1 ? "Aplicar a 1 empresa" : `Aplicar a ${pendentes.length} empresas`;
+  document.getElementById("overlay-grupo").classList.add("active");
+  return true;
+}
+
+document.getElementById("btn-grupo-cancelar").addEventListener("click", () => {
+  document.getElementById("overlay-grupo").classList.remove("active");
+});
+
+document.getElementById("btn-grupo-aplicar").addEventListener("click", async () => {
+  if (!grupoAplicacao) return;
+  if (!db) { showError("Sem conexão com o banco de dados. Recarregue a página."); return; }
+
+  const btn = document.getElementById("btn-grupo-aplicar");
+  const textoOriginal = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "Aplicando...";
+
+  const base = grupoAplicacao.candidatos[parseInt(document.getElementById("grupo-base").value, 10) || 0];
+  const clientesById = Object.fromEntries(clientes.map(c => [c.id, c]));
+  const origemCliente = clientesById[base.cliente_id];
+  const origemNome = origemCliente ? nomeComCodigo(origemCliente) : "cliente não encontrado";
+  // revalida: só quem ainda não tem pesquisa
+  const pendentes = grupoAplicacao.pendentes.filter(c => !respostaDoCliente(c.id));
+  const nomeGrupo = grupoAplicacao.nome;
+
+  if (pendentes.length === 0) {
+    document.getElementById("overlay-grupo").classList.remove("active");
+    return;
+  }
+
+  const copias = pendentes.map(c => ({
+    cliente_id: c.id,
+    nome_respondente: base.nome_respondente || null,
+    indicou: base.indicou || null,
+    nota: base.nota,
+    motivo: Array.isArray(base.motivo) ? base.motivo : [],
+    avaliacao_suporte: base.avaliacao_suporte || null,
+    sugestao: base.sugestao || null,
+    obs_interna: base.obs_interna || null,
+    duplicada_de_resposta_id: base.id || null,
+    duplicada_de_cliente: origemNome
+  }));
+
+  const { error: respErr } = await db.from("respostas_nps").insert(copias);
+  if (respErr) {
+    console.error(respErr);
+    alert("Erro ao aplicar a resposta ao grupo: " + respErr.message);
+    btn.disabled = false;
+    btn.textContent = textoOriginal;
+    return;
+  }
+
+  const agora = new Date().toISOString();
+  await Promise.all(pendentes.map(async c => {
+    const { error } = await db.from("clientes").update({
+      status: "concluido",
+      data_contato: agora,
+      tentativas: (c.tentativas || 0) + 1
+    }).eq("id", c.id);
+    if (error) console.error(error);
+  }));
+
+  const { error: histErr } = await db.from("historico_contatos").insert(pendentes.map(c => ({
+    cliente_id: c.id,
+    status: "concluido",
+    obs: `Resposta aplicada ao grupo ${nomeGrupo}, a partir de ${origemNome}.`
+  })));
+  if (histErr) console.error(histErr);
+
+  for (const c of pendentes) {
+    const telFuncionou = Array.isArray(c.telefones) ? c.telefones.find(t => t.funcionou) : null;
+    await syncToGoogleSheets({
+      data: agora,
+      codigo: c.codigo || "",
+      razao_social: c.nome || "",
+      cnpj_cpf: c.cnpj_cpf || "",
+      telefone_usado: telFuncionou ? telFuncionou.numero : "",
+      nome_respondente: base.nome_respondente || "",
+      indicou: base.indicou || "",
+      nota: base.nota,
+      motivo: Array.isArray(base.motivo) ? base.motivo.join("; ") : "",
+      avaliacao_suporte: base.avaliacao_suporte || "",
+      sugestao: base.sugestao || "",
+      obs_interna: base.obs_interna || ""
+    });
+  }
+
+  document.getElementById("overlay-grupo").classList.remove("active");
+  await loadData();
+});
+
 document.querySelectorAll("#comentarios-tabs .pill").forEach(pill => {
   pill.addEventListener("click", () => {
     document.querySelectorAll("#comentarios-tabs .pill").forEach(p => p.classList.remove("selected"));
@@ -1543,6 +1815,14 @@ function openModal(cliente) {
 
   document.getElementById("modal-nome").textContent = nomeComCodigo(cliente);
   document.getElementById("modal-sub").textContent = [cliente.cnpj_cpf, melhorNumero(cliente)].filter(Boolean).join(" · ");
+  const boxGrupo = document.getElementById("modal-grupo");
+  if (cliente.grupo_empresarial) {
+    const st = grupoStats(cliente.grupo_empresarial);
+    boxGrupo.textContent = `Grupo ${cliente.grupo_empresarial}: ${st.total} empresas, ${st.com} com pesquisa realizada`;
+    boxGrupo.classList.remove("hidden");
+  } else {
+    boxGrupo.classList.add("hidden");
+  }
 
   document.querySelectorAll("#overlay .pill").forEach(p => p.classList.remove("selected"));
   document.querySelectorAll("#overlay .nota-pill").forEach(p => p.classList.remove("selected"));
@@ -1625,8 +1905,8 @@ document.querySelectorAll(".nota-pill").forEach(pill => {
 });
 
 function syncToGoogleSheets(payload) {
-  if (!GOOGLE_SHEETS_WEBHOOK_URL) return;
-  fetch(GOOGLE_SHEETS_WEBHOOK_URL, {
+  if (!GOOGLE_SHEETS_WEBHOOK_URL) return Promise.resolve();
+  return fetch(GOOGLE_SHEETS_WEBHOOK_URL, {
     method: "POST",
     mode: "no-cors",
     headers: { "Content-Type": "text/plain" },
@@ -1721,8 +2001,13 @@ document.getElementById("btn-salvar").addEventListener("click", async () => {
     }
   }
 
+  const clienteSalvo = selectedCliente;
+  const salvouResposta = modalStatus === "concluido";
   document.getElementById("overlay").classList.remove("active");
   await loadData();
+  if (salvouResposta && clienteSalvo && clienteSalvo.grupo_empresarial) {
+    abrirAplicarGrupo(clienteSalvo.grupo_empresarial, { aposSalvar: true });
+  }
 });
 
 // ---------- Dashboard ----------
