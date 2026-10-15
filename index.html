@@ -359,6 +359,12 @@
   .grupo-detalhe .gm:last-child{border-bottom:none;}
   .gm-remove{font-size:12px; color:var(--muted); margin-left:10px; cursor:pointer; padding:2px 6px;}
   .gm-remove:hover{color:var(--red);}
+  tbody tr.sel{background:var(--purple-light);}
+  #ctx-menu{position:fixed; z-index:80; background:#fff; border:1px solid var(--border); border-radius:12px; box-shadow:0 8px 24px rgba(0,0,0,0.15); padding:6px; min-width:250px;}
+  .ctx-title{padding:6px 12px; font-size:11px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.04em;}
+  .ctx-item{padding:9px 12px; font-size:13px; font-weight:600; border-radius:8px; cursor:pointer;}
+  .ctx-item:hover{background:var(--purple-light); color:var(--purple);}
+  .ctx-sep{height:1px; background:var(--border); margin:4px 0;}
 
   /* Modal */
   .overlay{
@@ -492,10 +498,18 @@
       <div class="filter-chip" data-status="enviado_whatsapp">Enviado WhatsApp</div>
       <div class="filter-chip" data-status="concluido">Pesquisa realizada</div>
     </div>
+    <div id="fila-selecao" class="hidden" style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; background:var(--purple-light); border-radius:12px; padding:10px 14px; margin-bottom:14px;">
+      <strong id="fila-sel-count" style="color:var(--purple); font-size:13px;"></strong>
+      <button type="button" class="btn btn-primary" id="btn-sel-criar" style="padding:8px 14px;">Criar grupo</button>
+      <button type="button" class="btn btn-ghost" id="btn-sel-add" style="border:1px solid var(--border); background:#fff; padding:8px 14px;">Adicionar a um grupo</button>
+      <button type="button" class="btn btn-ghost" id="btn-sel-limpar" style="padding:8px 14px;">Limpar seleção</button>
+      <span style="font-size:12px; color:var(--muted);">Dica: clique com o botão direito em um cliente, ou use Ctrl+clique para marcar vários.</span>
+    </div>
     <div class="card">
       <table>
         <thead>
           <tr>
+            <th style="width:36px;"><input type="checkbox" id="fila-sel-todos" title="Selecionar todos os clientes visíveis"></th>
             <th>Cliente</th>
             <th>Município/UF</th>
             <th>Telefone</th>
@@ -867,6 +881,24 @@
   </div>
 </div>
 
+<!-- ===== MODAL: ESCOLHER GRUPO EXISTENTE ===== -->
+<div class="overlay" id="overlay-escolhe-grupo">
+  <div class="modal" style="max-width:460px;">
+    <h2>Adicionar a um grupo</h2>
+    <div class="sub" id="eg-sub"></div>
+    <div class="field">
+      <input type="text" id="eg-busca" placeholder="Buscar grupo...">
+    </div>
+    <div id="eg-lista" style="max-height:280px; overflow-y:auto; margin-bottom:8px;"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="btn-eg-cancelar">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MENU DE CONTEXTO DA FILA ===== -->
+<div id="ctx-menu" class="hidden"></div>
+
 <script>
 // ============================================================
 // CONFIGURAÇÃO — preencha com os dados do seu projeto Supabase
@@ -894,6 +926,8 @@ let currentSearchRespostas = "";
 let currentAgendaFilter = "todos";
 let modalTelefones = [];
 let reabrindoResposta = null;
+const filaSelecionados = new Set();
+let filaVisiveisIds = [];
 
 function respostaDoCliente(clienteId) {
   return respostas.find(r => r.cliente_id === clienteId) || null;
@@ -1072,6 +1106,7 @@ function renderFila() {
     return matchStatus && matchSearch;
   });
 
+  filaVisiveisIds = list.map(c => c.id);
   const tbody = document.getElementById("fila-body");
   const empty = document.getElementById("fila-empty");
   tbody.innerHTML = "";
@@ -1095,6 +1130,8 @@ function renderFila() {
       <td style="text-align:center;">${c.tentativas || 0}</td>
       <td>${c.data_contato ? new Date(c.data_contato).toLocaleDateString("pt-BR") : "—"}</td>
     `;
+    tr.dataset.id = c.id;
+    tr.insertAdjacentHTML("afterbegin", '<td><input type="checkbox" class="fila-sel"></td>');
     const copyBtnFila = tr.querySelector(".copy-icon-btn");
     if (copyBtnFila) {
       copyBtnFila.addEventListener("click", (e) => {
@@ -1105,9 +1142,20 @@ function renderFila() {
         setTimeout(() => { copyBtnFila.textContent = original; }, 1200);
       });
     }
-    tr.addEventListener("click", () => openModal(c));
+    const cbSel = tr.querySelector(".fila-sel");
+    cbSel.addEventListener("click", (e) => { e.stopPropagation(); alternarSelecaoFila(c.id, cbSel.checked); });
+    tr.addEventListener("click", (e) => {
+      if (e.ctrlKey || e.metaKey) { alternarSelecaoFila(c.id); return; }
+      openModal(c);
+    });
+    tr.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      if (!filaSelecionados.has(c.id)) { filaSelecionados.clear(); filaSelecionados.add(c.id); atualizarSelecaoFila(); }
+      abrirMenuContexto(e.clientX, e.clientY);
+    });
     tbody.appendChild(tr);
   });
+  atualizarSelecaoFila();
 }
 
 // ---------- Agenda ----------
@@ -1539,7 +1587,8 @@ function candidatosBase(nomeGrupo) {
 
 function abrirAplicarGrupo(nomeGrupo, opts = {}) {
   const st = grupoStats(nomeGrupo);
-  const pendentes = st.membros.filter(c => !respostaDoCliente(c.id));
+  // quando vem de "adicionar clientes", só os recém-adicionados entram na oferta
+  const pendentes = st.membros.filter(c => !respostaDoCliente(c.id) && (!opts.apenasIds || opts.apenasIds.has(c.id)));
   const candidatos = candidatosBase(nomeGrupo);
   if (pendentes.length === 0 || candidatos.length === 0) return false;
 
@@ -1549,7 +1598,9 @@ function abrirAplicarGrupo(nomeGrupo, opts = {}) {
   document.getElementById("grupo-titulo").textContent = `Aplicar resposta ao grupo ${nomeGrupo}`;
   document.getElementById("grupo-sub").textContent = opts.aposSalvar
     ? `Resposta salva. Deseja aplicar a mesma resposta às outras empresas do grupo que ainda não têm pesquisa?`
-    : `A resposta escolhida será copiada para as empresas do grupo que ainda não têm pesquisa.`;
+    : (opts.aposAdicionar
+      ? `Este grupo já tem resposta. Deseja aplicá-la aos clientes que acabaram de entrar e ainda não têm pesquisa?`
+      : `A resposta escolhida será copiada para as empresas do grupo que ainda não têm pesquisa.`);
 
   document.getElementById("grupo-base").innerHTML = candidatos.map((r, i) => {
     const cli = clientesById[r.cliente_id];
@@ -1706,6 +1757,11 @@ function abrirGrupoCliente(opts) {
   gcli = opts;
   gcliSelecionados = new Set();
   gcliConfirmandoMover = false;
+  // clientes já marcados (ex.: seleção feita na Fila); quem já está no grupo de destino fica de fora
+  (opts.preselecionar || []).forEach(id => {
+    const cli = clientes.find(x => x.id === id);
+    if (cli && !(opts.modo === "add" && cli.grupo_empresarial === opts.nome)) gcliSelecionados.add(id);
+  });
   document.getElementById("gcli-busca").value = "";
   document.getElementById("gcli-nome").value = "";
   document.getElementById("gcli-aviso").classList.add("hidden");
@@ -1737,9 +1793,12 @@ function atualizarBotaoGcli() {
   const n = gcliSelecionados.size;
   const btn = document.getElementById("btn-gcli-confirmar");
   btn.disabled = n === 0;
+  const criando = gcli && gcli.modo === "novo";
   btn.textContent = gcliConfirmandoMover
     ? "Confirmar e mover"
-    : (n === 0 ? "Adicionar" : (n === 1 ? "Adicionar 1 cliente" : `Adicionar ${n} clientes`));
+    : (criando
+      ? (n === 0 ? "Criar grupo" : (n === 1 ? "Criar grupo com 1 cliente" : `Criar grupo com ${n} clientes`))
+      : (n === 0 ? "Adicionar" : (n === 1 ? "Adicionar 1 cliente" : `Adicionar ${n} clientes`)));
 }
 
 function renderGcliLista() {
@@ -1755,8 +1814,9 @@ function renderGcliLista() {
 
   // sem grupo primeiro, depois quem já tem outro grupo, por último quem já está neste grupo
   const peso = (c) => (alvo && c.grupo_empresarial === alvo) ? 2 : (c.grupo_empresarial ? 1 : 0);
-  opcoes.sort((a, b) => peso(a) - peso(b));
-  opcoes = opcoes.slice(0, 40);
+  // marcados primeiro, depois sem grupo, depois quem já tem outro grupo
+  opcoes.sort((a, b) => ((gcliSelecionados.has(b.id) ? 1 : 0) - (gcliSelecionados.has(a.id) ? 1 : 0)) || (peso(a) - peso(b)));
+  opcoes = opcoes.slice(0, Math.max(40, gcliSelecionados.size));
 
   box.innerHTML = "";
   if (opcoes.length === 0) {
@@ -1826,8 +1886,138 @@ document.getElementById("btn-gcli-confirmar").addEventListener("click", async ()
   }
 
   gruposExpandidos.add(nome);
+  filaSelecionados.clear();
   document.getElementById("overlay-gcli").classList.remove("active");
   await loadData();
+  // se o grupo já tem resposta, oferece aplicar aos clientes recém-adicionados
+  abrirAplicarGrupo(nome, { aposAdicionar: true, apenasIds: new Set(ids) });
+});
+
+// ---------- Seleção na Fila e menu de botão direito ----------
+function alternarSelecaoFila(id, forcar) {
+  const marcar = forcar === undefined ? !filaSelecionados.has(id) : forcar;
+  if (marcar) filaSelecionados.add(id); else filaSelecionados.delete(id);
+  atualizarSelecaoFila();
+}
+
+function atualizarSelecaoFila() {
+  document.querySelectorAll("#fila-body tr").forEach(tr => {
+    const sel = filaSelecionados.has(Number(tr.dataset.id));
+    tr.classList.toggle("sel", sel);
+    const cb = tr.querySelector(".fila-sel");
+    if (cb) cb.checked = sel;
+  });
+  const todos = document.getElementById("fila-sel-todos");
+  const visiveisSel = filaVisiveisIds.filter(id => filaSelecionados.has(id)).length;
+  todos.checked = filaVisiveisIds.length > 0 && visiveisSel === filaVisiveisIds.length;
+  todos.indeterminate = visiveisSel > 0 && visiveisSel < filaVisiveisIds.length;
+
+  const n = filaSelecionados.size;
+  document.getElementById("fila-selecao").classList.toggle("hidden", n === 0);
+  document.getElementById("fila-sel-count").textContent = n === 1 ? "1 cliente selecionado" : `${n} clientes selecionados`;
+}
+
+document.getElementById("fila-sel-todos").addEventListener("click", (e) => {
+  const marcar = e.target.checked;
+  filaVisiveisIds.forEach(id => { if (marcar) filaSelecionados.add(id); else filaSelecionados.delete(id); });
+  atualizarSelecaoFila();
+});
+
+function limparSelecaoFila() {
+  filaSelecionados.clear();
+  atualizarSelecaoFila();
+}
+
+function abrirCriarGrupoComSelecionados() {
+  abrirGrupoCliente({ modo: "novo", preselecionar: [...filaSelecionados] });
+}
+
+document.getElementById("btn-sel-criar").addEventListener("click", () => abrirCriarGrupoComSelecionados());
+document.getElementById("btn-sel-add").addEventListener("click", () => abrirEscolherGrupo());
+document.getElementById("btn-sel-limpar").addEventListener("click", () => limparSelecaoFila());
+
+function fecharMenuContexto() {
+  document.getElementById("ctx-menu").classList.add("hidden");
+}
+
+function abrirMenuContexto(x, y) {
+  const menu = document.getElementById("ctx-menu");
+  const n = filaSelecionados.size;
+  menu.innerHTML = "";
+
+  const titulo = document.createElement("div");
+  titulo.className = "ctx-title";
+  titulo.textContent = n === 1 ? "1 cliente selecionado" : `${n} clientes selecionados`;
+  menu.appendChild(titulo);
+
+  const itens = [
+    [n === 1 ? "Criar grupo com este cliente" : `Criar grupo com os ${n} selecionados`, () => abrirCriarGrupoComSelecionados()],
+    [n === 1 ? "Adicionar a um grupo existente" : `Adicionar os ${n} a um grupo existente`, () => abrirEscolherGrupo()],
+    null,
+    ["Limpar seleção", () => limparSelecaoFila()]
+  ];
+  itens.forEach(it => {
+    if (!it) {
+      const sep = document.createElement("div");
+      sep.className = "ctx-sep";
+      menu.appendChild(sep);
+      return;
+    }
+    const div = document.createElement("div");
+    div.className = "ctx-item";
+    div.textContent = it[0];
+    div.addEventListener("click", () => { fecharMenuContexto(); it[1](); });
+    menu.appendChild(div);
+  });
+
+  menu.classList.remove("hidden");
+  const w = menu.offsetWidth, h = menu.offsetHeight;
+  menu.style.left = Math.max(8, Math.min(x, window.innerWidth - w - 8)) + "px";
+  menu.style.top = Math.max(8, Math.min(y, window.innerHeight - h - 8)) + "px";
+}
+
+document.addEventListener("click", (e) => { if (!e.target.closest("#ctx-menu")) fecharMenuContexto(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") fecharMenuContexto(); });
+document.addEventListener("contextmenu", (e) => { if (!e.target.closest("#fila-body tr")) fecharMenuContexto(); });
+window.addEventListener("scroll", fecharMenuContexto, true);
+window.addEventListener("resize", fecharMenuContexto);
+
+// escolher um grupo existente para receber os clientes selecionados
+function abrirEscolherGrupo() {
+  const n = filaSelecionados.size;
+  document.getElementById("eg-sub").textContent = n === 1
+    ? "Escolha o grupo que vai receber 1 cliente."
+    : `Escolha o grupo que vai receber os ${n} clientes selecionados.`;
+  document.getElementById("eg-busca").value = "";
+  renderEgLista();
+  document.getElementById("overlay-escolhe-grupo").classList.add("active");
+}
+
+function renderEgLista() {
+  const termo = document.getElementById("eg-busca").value.trim().toLowerCase();
+  const box = document.getElementById("eg-lista");
+  box.innerHTML = "";
+  const nomes = nomesDeGrupos().filter(nome => !termo || nome.toLowerCase().includes(termo));
+  if (nomes.length === 0) {
+    box.innerHTML = `<div class="empty" style="padding:16px;">${termo ? "Nenhum grupo encontrado." : "Nenhum grupo criado ainda. Use a opção Criar grupo."}</div>`;
+    return;
+  }
+  nomes.forEach(nome => {
+    const st = grupoStats(nome);
+    const div = document.createElement("div");
+    div.className = "dup-item";
+    div.innerHTML = `<div class="d-nome">${escapeHtml(nome)}</div><div class="d-info">${st.total} empresas, ${st.com} com pesquisa realizada</div>`;
+    div.addEventListener("click", () => {
+      document.getElementById("overlay-escolhe-grupo").classList.remove("active");
+      abrirGrupoCliente({ modo: "add", nome, preselecionar: [...filaSelecionados] });
+    });
+    box.appendChild(div);
+  });
+}
+
+document.getElementById("eg-busca").addEventListener("input", () => renderEgLista());
+document.getElementById("btn-eg-cancelar").addEventListener("click", () => {
+  document.getElementById("overlay-escolhe-grupo").classList.remove("active");
 });
 
 document.querySelectorAll("#comentarios-tabs .pill").forEach(pill => {
