@@ -357,6 +357,8 @@
   .grupo-detalhe td{background:#fbfaf8; font-size:13px;}
   .grupo-detalhe .gm{display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid var(--border);}
   .grupo-detalhe .gm:last-child{border-bottom:none;}
+  .gm-remove{font-size:12px; color:var(--muted); margin-left:10px; cursor:pointer; padding:2px 6px;}
+  .gm-remove:hover{color:var(--red);}
 
   /* Modal */
   .overlay{
@@ -566,6 +568,7 @@
     <div id="grupos-resumo" style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:18px;"></div>
     <div class="toolbar">
       <input type="text" id="search-grupos" placeholder="Buscar grupo...">
+      <button type="button" class="btn btn-primary" id="btn-novo-grupo" style="margin-left:auto; padding:9px 16px;">+ Novo grupo</button>
     </div>
     <div class="card">
       <table>
@@ -826,6 +829,40 @@
     <div class="modal-actions">
       <button class="btn btn-ghost" id="btn-grupo-cancelar">Agora não</button>
       <button class="btn btn-primary" id="btn-grupo-aplicar">Aplicar ao grupo</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL DE CRIAR GRUPO / ADICIONAR CLIENTES ===== -->
+<div class="overlay" id="overlay-gcli">
+  <div class="modal" style="max-width:520px;">
+    <h2 id="gcli-titulo">Novo grupo</h2>
+    <div class="sub" id="gcli-sub"></div>
+    <div class="field" id="gcli-nome-wrap">
+      <label>Nome do grupo <span style="color:var(--red);">*</span></label>
+      <input type="text" id="gcli-nome" placeholder="Ex.: RAMLIVE">
+    </div>
+    <div class="field">
+      <label>Clientes do grupo <span style="font-weight:400; color:var(--muted);">(pode marcar vários)</span></label>
+      <input type="text" id="gcli-busca" placeholder="Buscar por nome, código ou CNPJ...">
+    </div>
+    <div id="gcli-lista" style="max-height:260px; overflow-y:auto; margin-bottom:8px;"></div>
+    <div id="gcli-aviso" class="hidden" style="background:var(--amber-light); color:var(--amber); border-radius:10px; padding:10px 14px; font-size:13px; font-weight:600; margin-bottom:12px; line-height:1.5;"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="btn-gcli-cancelar">Cancelar</button>
+      <button class="btn btn-primary" id="btn-gcli-confirmar" disabled>Adicionar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL DE CONFIRMAÇÃO GENÉRICO ===== -->
+<div class="overlay" id="overlay-confirm">
+  <div class="modal" style="max-width:420px;">
+    <h2 id="confirm-titulo">Confirmar</h2>
+    <div class="sub" id="confirm-texto" style="line-height:1.5;"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="btn-confirm-nao">Cancelar</button>
+      <button class="btn btn-primary" id="btn-confirm-sim">Confirmar</button>
     </div>
   </div>
 </div>
@@ -1461,7 +1498,7 @@ function renderGrupos() {
       <td>${s.com}</td>
       <td>${s.pend}</td>
       <td><span class="badge ${situacao[0]}">${situacao[1]}</span></td>
-      <td>${podeAplicar ? '<button type="button" class="tel-copy grp-apply">Aplicar ao grupo</button>' : ""}</td>
+      <td><button type="button" class="tel-copy grp-add">Adicionar cliente</button>${podeAplicar ? '<button type="button" class="tel-copy grp-apply">Aplicar ao grupo</button>' : ""}</td>
     `;
     tr.addEventListener("click", () => {
       if (gruposExpandidos.has(s.nome)) gruposExpandidos.delete(s.nome); else gruposExpandidos.add(s.nome);
@@ -1469,6 +1506,7 @@ function renderGrupos() {
     });
     const btn = tr.querySelector(".grp-apply");
     if (btn) btn.addEventListener("click", (e) => { e.stopPropagation(); abrirAplicarGrupo(s.nome); });
+    tr.querySelector(".grp-add").addEventListener("click", (e) => { e.stopPropagation(); abrirGrupoCliente({ modo: "add", nome: s.nome }); });
     tbody.appendChild(tr);
 
     if (aberto) {
@@ -1478,9 +1516,14 @@ function renderGrupos() {
         const r = respostaDoCliente(c.id);
         const rotulo = r ? ("Pesquisa realizada" + (r.duplicada_de_cliente ? " (duplicada)" : "")) : (STATUS_LABEL[c.status] || c.status);
         const cls = r ? "concluido" : c.status;
-        return `<div class="gm"><span>${escapeHtml(nomeComCodigo(c))}</span><span class="badge ${cls}">${escapeHtml(rotulo)}</span></div>`;
+        return `<div class="gm"><span>${escapeHtml(nomeComCodigo(c))}</span><span style="display:flex; align-items:center;"><span class="badge ${cls}">${escapeHtml(rotulo)}</span><span class="gm-remove" data-id="${c.id}">remover</span></span></div>`;
       }).join("");
       det.innerHTML = `<td colspan="6">${linhas}</td>`;
+      det.querySelectorAll(".gm-remove").forEach(el => el.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const cli = s.membros.find(m => String(m.id) === el.dataset.id);
+        if (cli) pedirRemoverDoGrupo(cli, s);
+      }));
       tbody.appendChild(det);
     }
   });
@@ -1608,6 +1651,182 @@ document.getElementById("btn-grupo-aplicar").addEventListener("click", async () 
   }
 
   document.getElementById("overlay-grupo").classList.remove("active");
+  await loadData();
+});
+
+// ---------- Criar grupo e adicionar clientes ----------
+let gcli = null;
+let gcliSelecionados = new Set();
+let gcliConfirmandoMover = false;
+let confirmCallback = null;
+
+function normalizarNome(s) {
+  return (s || "").trim().toLocaleLowerCase("pt-BR");
+}
+
+function abrirConfirmacao({ titulo, texto, botao, onSim }) {
+  document.getElementById("confirm-titulo").textContent = titulo;
+  document.getElementById("confirm-texto").textContent = texto;
+  document.getElementById("btn-confirm-sim").textContent = botao || "Confirmar";
+  confirmCallback = onSim;
+  document.getElementById("overlay-confirm").classList.add("active");
+}
+
+document.getElementById("btn-confirm-nao").addEventListener("click", () => {
+  confirmCallback = null;
+  document.getElementById("overlay-confirm").classList.remove("active");
+});
+
+document.getElementById("btn-confirm-sim").addEventListener("click", async () => {
+  const cb = confirmCallback;
+  confirmCallback = null;
+  document.getElementById("overlay-confirm").classList.remove("active");
+  if (cb) await cb();
+});
+
+function pedirRemoverDoGrupo(cliente, stats) {
+  const ultimo = stats.total === 1;
+  abrirConfirmacao({
+    titulo: "Remover do grupo",
+    texto: `${nomeComCodigo(cliente)} deixa de fazer parte do grupo ${stats.nome}. Respostas já registradas não são alteradas.`
+      + (ultimo ? " Como é o último cliente, o grupo deixará de existir." : ""),
+    botao: "Remover",
+    onSim: async () => {
+      if (!db) { showError("Sem conexão com o banco de dados. Recarregue a página."); return; }
+      const { error } = await db.from("clientes").update({ grupo_empresarial: null }).eq("id", cliente.id);
+      if (error) { console.error(error); alert("Erro ao remover do grupo: " + error.message); return; }
+      await loadData();
+    }
+  });
+}
+
+document.getElementById("btn-novo-grupo").addEventListener("click", () => abrirGrupoCliente({ modo: "novo" }));
+
+function abrirGrupoCliente(opts) {
+  gcli = opts;
+  gcliSelecionados = new Set();
+  gcliConfirmandoMover = false;
+  document.getElementById("gcli-busca").value = "";
+  document.getElementById("gcli-nome").value = "";
+  document.getElementById("gcli-aviso").classList.add("hidden");
+  const novo = opts.modo === "novo";
+  document.getElementById("gcli-titulo").textContent = novo ? "Novo grupo" : `Adicionar cliente ao grupo ${opts.nome}`;
+  document.getElementById("gcli-sub").textContent = novo
+    ? "Defina o nome e marque os clientes do grupo. O grupo só existe se tiver ao menos um cliente."
+    : "Marque os clientes que devem entrar neste grupo.";
+  document.getElementById("gcli-nome-wrap").classList.toggle("hidden", !novo);
+  renderGcliLista();
+  atualizarBotaoGcli();
+  document.getElementById("overlay-gcli").classList.add("active");
+}
+
+function nomeGrupoAlvo() {
+  if (!gcli) return "";
+  return gcli.modo === "novo"
+    ? document.getElementById("gcli-nome").value.trim().toLocaleUpperCase("pt-BR")
+    : gcli.nome;
+}
+
+function resetarConfirmacaoMover() {
+  gcliConfirmandoMover = false;
+  document.getElementById("gcli-aviso").classList.add("hidden");
+  atualizarBotaoGcli();
+}
+
+function atualizarBotaoGcli() {
+  const n = gcliSelecionados.size;
+  const btn = document.getElementById("btn-gcli-confirmar");
+  btn.disabled = n === 0;
+  btn.textContent = gcliConfirmandoMover
+    ? "Confirmar e mover"
+    : (n === 0 ? "Adicionar" : (n === 1 ? "Adicionar 1 cliente" : `Adicionar ${n} clientes`));
+}
+
+function renderGcliLista() {
+  const box = document.getElementById("gcli-lista");
+  const termo = document.getElementById("gcli-busca").value.trim().toLowerCase();
+  const alvo = gcli.modo === "add" ? gcli.nome : null;
+
+  let opcoes = clientes.filter(c => !termo
+    || (c.nome || "").toLowerCase().includes(termo)
+    || (c.nome_fantasia || "").toLowerCase().includes(termo)
+    || String(c.codigo || "").toLowerCase().includes(termo)
+    || (c.cnpj_cpf || "").toLowerCase().includes(termo));
+
+  // sem grupo primeiro, depois quem já tem outro grupo, por último quem já está neste grupo
+  const peso = (c) => (alvo && c.grupo_empresarial === alvo) ? 2 : (c.grupo_empresarial ? 1 : 0);
+  opcoes.sort((a, b) => peso(a) - peso(b));
+  opcoes = opcoes.slice(0, 40);
+
+  box.innerHTML = "";
+  if (opcoes.length === 0) {
+    box.innerHTML = '<div class="empty" style="padding:16px;">Nenhum cliente encontrado.</div>';
+    return;
+  }
+  opcoes.forEach(c => {
+    const jaNoAlvo = !!alvo && c.grupo_empresarial === alvo;
+    const div = document.createElement("div");
+    div.className = "dup-item" + (gcliSelecionados.has(c.id) ? " selected" : "") + (jaNoAlvo ? " disabled" : "");
+    const info = [c.cnpj_cpf, c.municipio].filter(Boolean).map(escapeHtml).join(" · ");
+    const tag = jaNoAlvo ? " · Já está neste grupo" : (c.grupo_empresarial ? ` · Grupo atual: ${escapeHtml(c.grupo_empresarial)}` : "");
+    div.innerHTML = `<div class="d-nome">${escapeHtml(nomeComCodigo(c))}</div><div class="d-info">${info}${tag}</div>`;
+    if (!jaNoAlvo) {
+      div.addEventListener("click", () => {
+        if (gcliSelecionados.has(c.id)) gcliSelecionados.delete(c.id); else gcliSelecionados.add(c.id);
+        renderGcliLista();
+        resetarConfirmacaoMover();
+      });
+    }
+    box.appendChild(div);
+  });
+}
+
+document.getElementById("gcli-busca").addEventListener("input", () => renderGcliLista());
+document.getElementById("gcli-nome").addEventListener("input", () => resetarConfirmacaoMover());
+document.getElementById("btn-gcli-cancelar").addEventListener("click", () => {
+  document.getElementById("overlay-gcli").classList.remove("active");
+});
+
+document.getElementById("btn-gcli-confirmar").addEventListener("click", async () => {
+  if (!gcli || gcliSelecionados.size === 0) return;
+  const nome = nomeGrupoAlvo();
+  if (!nome) { alert("Informe o nome do grupo."); return; }
+  if (gcli.modo === "novo" && nomesDeGrupos().some(g => normalizarNome(g) === normalizarNome(nome))) {
+    alert(`Já existe um grupo chamado ${nome}. Use o botão "Adicionar cliente" nele.`);
+    return;
+  }
+
+  const escolhidos = clientes.filter(c => gcliSelecionados.has(c.id));
+  const aMover = escolhidos.filter(c => c.grupo_empresarial && c.grupo_empresarial !== nome);
+  if (aMover.length > 0 && !gcliConfirmandoMover) {
+    gcliConfirmandoMover = true;
+    const aviso = document.getElementById("gcli-aviso");
+    aviso.innerHTML = (aMover.length === 1
+      ? "1 cliente já está em outro grupo e será movido"
+      : `${aMover.length} clientes já estão em outros grupos e serão movidos`)
+      + ` para ${escapeHtml(nome)}:<br>`
+      + aMover.map(c => `${escapeHtml(nomeComCodigo(c))} (de ${escapeHtml(c.grupo_empresarial)})`).join("<br>");
+    aviso.classList.remove("hidden");
+    atualizarBotaoGcli();
+    return;
+  }
+
+  if (!db) { showError("Sem conexão com o banco de dados. Recarregue a página."); return; }
+  const btn = document.getElementById("btn-gcli-confirmar");
+  btn.disabled = true;
+  btn.textContent = "Salvando...";
+
+  const ids = escolhidos.map(c => c.id);
+  const { error } = await db.from("clientes").update({ grupo_empresarial: nome }).in("id", ids);
+  if (error) {
+    console.error(error);
+    alert("Erro ao salvar o grupo: " + error.message);
+    atualizarBotaoGcli();
+    return;
+  }
+
+  gruposExpandidos.add(nome);
+  document.getElementById("overlay-gcli").classList.remove("active");
   await loadData();
 });
 
