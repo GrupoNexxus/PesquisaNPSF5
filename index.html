@@ -2181,6 +2181,8 @@ function mostrarPesquisaRealizada(r) {
     ["Suporte", r.avaliacao_suporte || "Não informado"]
   ];
   if (r.duplicada_de_cliente) linhas.push(["Duplicada de", r.duplicada_de_cliente]);
+  const obsSalva = r.obs_interna || (selectedCliente && selectedCliente.obs) || "";
+  if (obsSalva) linhas.push(["Observação interna", obsSalva]);
   document.getElementById("realizada-detalhes").innerHTML =
     linhas.map(([k, v]) => `<div><strong>${k}:</strong> ${escapeHtml(v)}</div>`).join("");
 }
@@ -2214,7 +2216,7 @@ document.getElementById("btn-reabrir").addEventListener("click", () => {
   document.querySelectorAll("#f-motivo .pill").forEach(p => p.classList.toggle("selected", modalMotivos.includes(p.dataset.value)));
   document.getElementById("f-suporte").value = r.avaliacao_suporte || "";
   document.getElementById("f-sugestao").value = r.sugestao || "";
-  document.getElementById("f-obs").value = r.obs_interna || "";
+  document.getElementById("f-obs").value = r.obs_interna || (selectedCliente && selectedCliente.obs) || "";
 });
 
 function openModal(cliente) {
@@ -2240,7 +2242,7 @@ function openModal(cliente) {
   document.getElementById("f-nome-respondente").value = "";
   document.getElementById("f-suporte").value = "";
   document.getElementById("f-sugestao").value = "";
-  document.getElementById("f-obs").value = "";
+  document.getElementById("f-obs").value = cliente.obs || "";
   document.getElementById("f-data-retorno").value = "";
 
   modalTelefones = buildTelefonesIniciais(cliente);
@@ -2358,10 +2360,19 @@ document.getElementById("btn-salvar").addEventListener("click", async () => {
   const { error: updErr } = await db.from("clientes").update(updates).eq("id", selectedCliente.id);
   if (updErr) { console.error(updErr); alert("Erro ao salvar: " + updErr.message); return; }
 
+  // a observação fica salva no cliente; o histórico só ganha o texto quando ele muda
+  const obsDigitada = document.getElementById("f-obs").value.trim();
+  const obsMudou = obsDigitada !== (selectedCliente.obs || "").trim();
+  let obsHistorico = (obsMudou && obsDigitada) ? obsDigitada : null;
+  if (reabrindoResposta) {
+    obsHistorico = obsHistorico
+      ? `Pesquisa reaberta e resposta substituída. ${obsHistorico}`
+      : "Pesquisa reaberta e resposta substituída.";
+  }
   const { error: histErr } = await db.from("historico_contatos").insert({
     cliente_id: selectedCliente.id,
     status: modalStatus,
-    obs: document.getElementById("f-obs").value || (reabrindoResposta ? "Pesquisa reaberta e resposta substituída." : null)
+    obs: obsHistorico
   });
   if (histErr) { console.error(histErr); }
 
