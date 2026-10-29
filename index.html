@@ -533,26 +533,6 @@
       <span id="pessoa-distribuir-texto" style="font-size:13px; color:var(--ink);"></span>
       <button type="button" class="btn btn-primary" id="btn-distribuir" style="padding:8px 14px; margin-left:auto;">Distribuir entre 1, 2 e 3</button>
     </div>
-    <div class="stats-grid" style="margin-bottom:16px;">
-      <div class="card stat-card">
-        <div class="stat-label">Pendentes</div>
-        <div class="stat-value" id="pes-pendentes">0</div>
-        <div class="stat-sub" id="pes-pendentes-sub"></div>
-      </div>
-      <div class="card stat-card">
-        <div class="stat-label">A ligar</div>
-        <div class="stat-value" id="pes-a-ligar">0</div>
-      </div>
-      <div class="card stat-card">
-        <div class="stat-label">Retornar</div>
-        <div class="stat-value" id="pes-retornar">0</div>
-        <div class="stat-sub" id="pes-retornar-sub"></div>
-      </div>
-      <div class="card stat-card">
-        <div class="stat-label">Não atendeu</div>
-        <div class="stat-value" id="pes-nao-atendeu">0</div>
-      </div>
-    </div>
     <div class="toolbar">
       <input type="text" id="search-pessoa" placeholder="Buscar por nome, código ou grupo...">
       <div class="filter-chip active" data-pstatus="todos">Todos</div>
@@ -1253,19 +1233,6 @@ function renderPessoa() {
 
   const daPessoa = clientes.filter(c => Number(c.responsavel) === currentPessoa);
   const pendentes = daPessoa.filter(ehPendente);
-  const finalizados = daPessoa.length - pendentes.length;
-
-  const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
-  const retornos = pendentes.filter(c => c.status === "retornar");
-  const retornosVencidos = retornos.filter(c => c.data_retorno && new Date(c.data_retorno) < new Date(hoje.getTime() + 86400000)).length;
-
-  document.getElementById("pes-pendentes").textContent = pendentes.length;
-  document.getElementById("pes-pendentes-sub").textContent = `${finalizados} finalizado(s) de ${daPessoa.length}`;
-  document.getElementById("pes-a-ligar").textContent = pendentes.filter(c => c.status === "a_ligar").length;
-  document.getElementById("pes-retornar").textContent = retornos.length;
-  document.getElementById("pes-retornar-sub").textContent = retornosVencidos ? `${retornosVencidos} para hoje ou atrasado(s)` : "";
-  document.getElementById("pes-nao-atendeu").textContent = pendentes.filter(c => c.status === "nao_atendeu").length;
-
   const s = currentPessoaSearch;
   const list = pendentes.filter(c => {
     const matchStatus = currentPessoaStatus === "todos" || c.status === currentPessoaStatus;
