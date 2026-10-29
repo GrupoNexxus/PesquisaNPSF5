@@ -474,6 +474,9 @@
   <h1>Pesquisa NPS de Clientes</h1>
   <nav>
     <button class="tab-btn active" data-view="fila">Fila de ligação</button>
+    <button class="tab-btn" data-view="pessoa" data-pessoa="1">Pessoa 1</button>
+    <button class="tab-btn" data-view="pessoa" data-pessoa="2">Pessoa 2</button>
+    <button class="tab-btn" data-view="pessoa" data-pessoa="3">Pessoa 3</button>
     <button class="tab-btn" data-view="agenda">Agenda</button>
     <button class="tab-btn" data-view="respostas">Respostas</button>
     <button class="tab-btn" data-view="grupos">Grupos</button>
@@ -521,6 +524,57 @@
         <tbody id="fila-body"></tbody>
       </table>
       <div id="fila-empty" class="empty hidden">Nenhum cliente encontrado.</div>
+    </div>
+  </section>
+
+  <!-- ===== PESSOA 1, 2, 3 (versão temporária) ===== -->
+  <section id="view-pessoa" class="view">
+    <div id="pessoa-distribuir" class="hidden" style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; background:var(--amber-light); border-radius:12px; padding:12px 16px; margin-bottom:14px;">
+      <span id="pessoa-distribuir-texto" style="font-size:13px; color:var(--ink);"></span>
+      <button type="button" class="btn btn-primary" id="btn-distribuir" style="padding:8px 14px; margin-left:auto;">Distribuir entre 1, 2 e 3</button>
+    </div>
+    <div class="stats-grid" style="margin-bottom:16px;">
+      <div class="card stat-card">
+        <div class="stat-label">Pendentes</div>
+        <div class="stat-value" id="pes-pendentes">0</div>
+        <div class="stat-sub" id="pes-pendentes-sub"></div>
+      </div>
+      <div class="card stat-card">
+        <div class="stat-label">A ligar</div>
+        <div class="stat-value" id="pes-a-ligar">0</div>
+      </div>
+      <div class="card stat-card">
+        <div class="stat-label">Retornar</div>
+        <div class="stat-value" id="pes-retornar">0</div>
+        <div class="stat-sub" id="pes-retornar-sub"></div>
+      </div>
+      <div class="card stat-card">
+        <div class="stat-label">Não atendeu</div>
+        <div class="stat-value" id="pes-nao-atendeu">0</div>
+      </div>
+    </div>
+    <div class="toolbar">
+      <input type="text" id="search-pessoa" placeholder="Buscar por nome, código ou grupo...">
+      <div class="filter-chip active" data-pstatus="todos">Todos</div>
+      <div class="filter-chip" data-pstatus="a_ligar">A ligar</div>
+      <div class="filter-chip" data-pstatus="retornar">Retornar</div>
+      <div class="filter-chip" data-pstatus="nao_atendeu">Não atendeu</div>
+    </div>
+    <div class="card">
+      <table>
+        <thead>
+          <tr>
+            <th>Cliente</th>
+            <th>Município/UF</th>
+            <th>Telefone</th>
+            <th>Status</th>
+            <th>Tentativas</th>
+            <th>Último contato</th>
+          </tr>
+        </thead>
+        <tbody id="pessoa-body"></tbody>
+      </table>
+      <div id="pessoa-empty" class="empty hidden"></div>
     </div>
   </section>
 
@@ -997,6 +1051,13 @@ document.querySelectorAll(".tab-btn").forEach(btn => {
     document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
     btn.classList.add("active");
     document.getElementById("view-" + btn.dataset.view).classList.add("active");
+    if (btn.dataset.view === "pessoa") {
+      currentPessoa = Number(btn.dataset.pessoa);
+      history.replaceState(null, "", "#pessoa" + currentPessoa);
+      renderPessoa();
+    } else {
+      history.replaceState(null, "", location.pathname + location.search);
+    }
     if (btn.dataset.view === "dashboard") { renderDashboard(); renderComentarios(currentComentarioCat); }
     if (btn.dataset.view === "agenda") renderAgenda();
     if (btn.dataset.view === "respostas") renderRespostas();
@@ -1057,6 +1118,7 @@ async function loadData() {
     historico = hData || [];
 
     renderFila();
+    renderPessoa();
     renderAgenda();
     renderRespostas();
     renderGrupos();
@@ -1157,6 +1219,167 @@ function renderFila() {
   });
   atualizarSelecaoFila();
 }
+
+// ---------- Pessoa 1, 2, 3 (versão temporária) ----------
+const PESSOAS = [1, 2, 3];
+const STATUS_PENDENTES = ["a_ligar", "retornar", "nao_atendeu"];
+let currentPessoa = 1;
+let currentPessoaStatus = "todos";
+let currentPessoaSearch = "";
+
+function ehPendente(c) { return STATUS_PENDENTES.includes(c.status); }
+
+document.getElementById("search-pessoa").addEventListener("input", (e) => {
+  currentPessoaSearch = e.target.value.toLowerCase();
+  renderPessoa();
+});
+
+document.querySelectorAll("#view-pessoa .filter-chip").forEach(chip => {
+  chip.addEventListener("click", () => {
+    document.querySelectorAll("#view-pessoa .filter-chip").forEach(c => c.classList.remove("active"));
+    chip.classList.add("active");
+    currentPessoaStatus = chip.dataset.pstatus;
+    renderPessoa();
+  });
+});
+
+function renderPessoa() {
+  // Aviso de clientes pendentes ainda sem responsável
+  const semResp = clientes.filter(c => ehPendente(c) && !c.responsavel);
+  const aviso = document.getElementById("pessoa-distribuir");
+  aviso.classList.toggle("hidden", semResp.length === 0);
+  document.getElementById("pessoa-distribuir-texto").textContent =
+    `${semResp.length} cliente(s) pendente(s) ainda sem responsável.`;
+
+  const daPessoa = clientes.filter(c => Number(c.responsavel) === currentPessoa);
+  const pendentes = daPessoa.filter(ehPendente);
+  const finalizados = daPessoa.length - pendentes.length;
+
+  const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+  const retornos = pendentes.filter(c => c.status === "retornar");
+  const retornosVencidos = retornos.filter(c => c.data_retorno && new Date(c.data_retorno) < new Date(hoje.getTime() + 86400000)).length;
+
+  document.getElementById("pes-pendentes").textContent = pendentes.length;
+  document.getElementById("pes-pendentes-sub").textContent = `${finalizados} finalizado(s) de ${daPessoa.length}`;
+  document.getElementById("pes-a-ligar").textContent = pendentes.filter(c => c.status === "a_ligar").length;
+  document.getElementById("pes-retornar").textContent = retornos.length;
+  document.getElementById("pes-retornar-sub").textContent = retornosVencidos ? `${retornosVencidos} para hoje ou atrasado(s)` : "";
+  document.getElementById("pes-nao-atendeu").textContent = pendentes.filter(c => c.status === "nao_atendeu").length;
+
+  const s = currentPessoaSearch;
+  const list = pendentes.filter(c => {
+    const matchStatus = currentPessoaStatus === "todos" || c.status === currentPessoaStatus;
+    const matchSearch = !s
+      || (c.nome || "").toLowerCase().includes(s)
+      || (c.nome_fantasia || "").toLowerCase().includes(s)
+      || (c.grupo_empresarial || "").toLowerCase().includes(s)
+      || String(c.codigo || "").toLowerCase().includes(s);
+    return matchStatus && matchSearch;
+  });
+
+  const tbody = document.getElementById("pessoa-body");
+  const empty = document.getElementById("pessoa-empty");
+  tbody.innerHTML = "";
+  if (list.length === 0) {
+    empty.classList.remove("hidden");
+    empty.textContent = daPessoa.length === 0
+      ? "Nenhum cliente distribuído para esta pessoa. Use o botão Distribuir entre 1, 2 e 3."
+      : (pendentes.length === 0 ? "Todos os contatos desta pessoa foram finalizados." : "Nenhum cliente encontrado com esse filtro/busca.");
+    return;
+  }
+  empty.classList.add("hidden");
+
+  list.forEach(c => {
+    const tr = document.createElement("tr");
+    const retornoTxt = c.status === "retornar" && c.data_retorno
+      ? `<br><span style="font-size:11px; color:var(--muted);">${new Date(c.data_retorno).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}</span>` : "";
+    tr.innerHTML = `
+      <td><strong>${escapeHtml(nomeComCodigo(c))}</strong>${c.grupo_empresarial ? `<br><span class="badge" style="margin-top:4px; background:var(--purple-light); color:var(--purple);">${escapeHtml(c.grupo_empresarial)}</span>` : ""}</td>
+      <td>${escapeHtml([c.municipio, c.uf].filter(Boolean).join("/"))}</td>
+      <td>${escapeHtml(melhorNumero(c))}${melhorNumero(c) !== "—" ? '<button type="button" class="copy-icon-btn" title="Copiar número">⧉</button>' : ""}</td>
+      <td><span class="badge ${c.status}">${STATUS_LABEL[c.status] || c.status}</span>${retornoTxt}</td>
+      <td style="text-align:center;">${c.tentativas || 0}</td>
+      <td>${c.data_contato ? new Date(c.data_contato).toLocaleDateString("pt-BR") : "—"}</td>
+    `;
+    const copyBtn = tr.querySelector(".copy-icon-btn");
+    if (copyBtn) {
+      copyBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        copiarNumero(melhorNumero(c), null);
+        const original = copyBtn.textContent;
+        copyBtn.textContent = "✓";
+        setTimeout(() => { copyBtn.textContent = original; }, 1200);
+      });
+    }
+    tr.addEventListener("click", () => openModal(c));
+    tbody.appendChild(tr);
+  });
+}
+
+// Divide igualmente os pendentes sem responsável, mantendo cada grupo empresarial com a mesma pessoa
+document.getElementById("btn-distribuir").addEventListener("click", () => {
+  const semResp = clientes.filter(c => ehPendente(c) && !c.responsavel);
+  if (semResp.length === 0) return;
+  abrirConfirmacao({
+    titulo: "Distribuir clientes",
+    texto: `Os ${semResp.length} clientes pendentes sem responsável serão divididos igualmente entre Pessoa 1, 2 e 3. Empresas do mesmo grupo ficam com a mesma pessoa. Quem já tem responsável não muda.`,
+    botao: "Distribuir",
+    onSim: distribuirClientes
+  });
+});
+
+async function distribuirClientes() {
+  const semResp = clientes.filter(c => ehPendente(c) && !c.responsavel);
+
+  // Monta blocos: cada grupo empresarial é um bloco; clientes sem grupo são blocos de 1
+  const blocos = new Map();
+  semResp.forEach(c => {
+    const chave = c.grupo_empresarial ? "g:" + normalizarNome(c.grupo_empresarial) : "c:" + c.id;
+    if (!blocos.has(chave)) blocos.set(chave, []);
+    blocos.get(chave).push(c);
+  });
+
+  // Carga atual de pendentes de cada pessoa (para equilibrar também distribuições posteriores)
+  const carga = {};
+  PESSOAS.forEach(p => { carga[p] = clientes.filter(c => ehPendente(c) && Number(c.responsavel) === p).length; });
+
+  // Se um grupo já tem membro com responsável, o bloco vai para essa mesma pessoa
+  const donoDoGrupo = {};
+  clientes.forEach(c => {
+    if (c.grupo_empresarial && c.responsavel) donoDoGrupo["g:" + normalizarNome(c.grupo_empresarial)] = Number(c.responsavel);
+  });
+
+  const destino = {}; PESSOAS.forEach(p => destino[p] = []);
+  const ordenados = [...blocos.entries()].sort((a, b) => b[1].length - a[1].length);
+  ordenados.forEach(([chave, membros]) => {
+    let p = donoDoGrupo[chave];
+    if (!p) p = PESSOAS.reduce((min, x) => carga[x] < carga[min] ? x : min, PESSOAS[0]);
+    destino[p].push(...membros.map(m => m.id));
+    carga[p] += membros.length;
+  });
+
+  for (const p of PESSOAS) {
+    if (destino[p].length === 0) continue;
+    const { error } = await db.from("clientes")
+      .update({ responsavel: p })
+      .in("id", destino[p])
+      .is("responsavel", null);
+    if (error) {
+      console.error(error);
+      showError("Erro ao distribuir clientes: " + error.message + " (confira se a coluna responsavel foi criada no Supabase).");
+      return;
+    }
+  }
+  await loadData();
+}
+
+// Abre direto na aba da pessoa se o link tiver #pessoa1, #pessoa2 ou #pessoa3
+(function abrirPessoaPeloLink() {
+  const m = location.hash.match(/^#pessoa([123])$/);
+  if (!m) return;
+  const btn = document.querySelector(`.tab-btn[data-view="pessoa"][data-pessoa="${m[1]}"]`);
+  if (btn) btn.click();
+})();
 
 // ---------- Agenda ----------
 document.querySelectorAll("#view-agenda .filter-chip").forEach(chip => {
