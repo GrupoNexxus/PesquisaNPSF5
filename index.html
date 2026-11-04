@@ -459,6 +459,30 @@
   .btn-primary{background:var(--purple); color:#fff;}
   .btn-ghost{background:none; color:var(--muted);}
   .hidden{display:none !important;}
+  /* ---- Convites do evento ---- */
+  .badge.cv-convidado{background:#E5F1FB; color:#1D6FA5;}
+  .badge.cv-inscrito{background:var(--green-light); color:#1E7F50;}
+  .badge.cv-nao_vai{background:#EDE7D8; color:#8A6D1D;}
+  .badge.cv-sem_interesse{background:var(--red-light); color:#B23A39;}
+  .badge.cv-tentativa{background:#EFEEEA; color:var(--muted);}
+  .badge.nps-promotor{background:var(--green-light); color:#1E7F50;}
+  .badge.nps-neutro{background:var(--amber-light); color:var(--amber);}
+  .badge.nps-detrator{background:var(--red-light); color:#B23A39;}
+  .fila-switch{display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:14px; margin-bottom:16px;}
+  .fila-switch button{font-family:'Inter',sans-serif; text-align:left; cursor:pointer; padding:16px 18px; border-radius:14px; border:1px solid var(--border); background:var(--card); color:var(--ink);}
+  .fila-switch button.active{background:var(--purple); border-color:var(--purple); color:#fff;}
+  .fila-switch .fs-titulo{font-weight:700; font-size:15px;}
+  .fila-switch .fs-desc{font-size:12px; margin-top:4px; opacity:.85;}
+  .fila-switch .fs-num{font-family:'Sora',sans-serif; font-weight:800; font-size:26px; margin-top:8px;}
+  .pessoa-pill{font-family:'Inter',sans-serif; font-size:13px; font-weight:700; padding:9px 16px; border-radius:999px; border:1px solid var(--border); background:#fff; color:var(--ink); cursor:pointer;}
+  .pessoa-pill.active{background:var(--purple); border-color:var(--purple); color:#fff;}
+  .convite-box{border:2px solid var(--purple); border-radius:14px; padding:14px 16px; margin-bottom:16px; background:#fff;}
+  .convite-box h3{margin:0 0 10px 0; font-family:'Sora',sans-serif; font-size:15px; color:var(--purple);}
+  .stat-card.clicavel{cursor:pointer;}
+  .stat-card.clicavel.active{outline:2px solid var(--purple);}
+  .cv-filtros{display:flex; flex-wrap:wrap; gap:10px; margin-bottom:14px;}
+  .cv-filtros input, .cv-filtros select{padding:10px 12px; border-radius:10px; border:1px solid var(--border); font-family:'Inter',sans-serif; font-size:13px; background:#fff;}
+  .cv-filtros input{flex:1 1 260px;}
 
   @media (max-width: 720px){
     .stats-grid{grid-template-columns:repeat(2,1fr);}
@@ -474,10 +498,13 @@
   <h1>Pesquisa NPS de Clientes</h1>
   <nav>
     <button class="tab-btn active" data-view="fila">Fila de ligação</button>
+    <button class="tab-btn" data-view="pessoa">Minha fila</button>
+    <button class="tab-btn" data-view="convites">Convites do evento</button>
     <button class="tab-btn" data-view="agenda">Agenda</button>
     <button class="tab-btn" data-view="respostas">Respostas</button>
     <button class="tab-btn" data-view="grupos">Grupos</button>
     <button class="tab-btn" data-view="dashboard">Dashboard</button>
+    <button class="tab-btn" data-view="equipe">Equipe</button>
   </nav>
 </header>
 
@@ -521,6 +548,143 @@
         <tbody id="fila-body"></tbody>
       </table>
       <div id="fila-empty" class="empty hidden">Nenhum cliente encontrado.</div>
+    </div>
+  </section>
+
+  <!-- ===== MINHA FILA (por pessoa) ===== -->
+  <section id="view-pessoa" class="view">
+    <div style="display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-bottom:14px;">
+      <span style="font-size:13px; color:var(--muted); font-weight:600;">Ligando como:</span>
+      <div id="pessoa-seletor" style="display:flex; flex-wrap:wrap; gap:8px;"></div>
+    </div>
+    <div id="pessoa-distribuir" class="hidden" style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; background:var(--amber-light); border-radius:12px; padding:12px 16px; margin-bottom:14px;">
+      <span id="pessoa-distribuir-texto" style="font-size:13px; color:var(--ink);"></span>
+      <button type="button" class="btn btn-primary" id="btn-distribuir" style="padding:8px 14px; margin-left:auto;">Distribuir entre a equipe</button>
+    </div>
+    <div class="fila-switch">
+      <button type="button" id="fs-pesquisa" class="active">
+        <div class="fs-titulo">Pesquisa + convite</div>
+        <div class="fs-desc">Ainda não responderam o NPS. Faça a pesquisa e registre o convite na mesma ligação.</div>
+        <div class="fs-num" id="fs-pesquisa-num">0</div>
+      </button>
+      <button type="button" id="fs-convite">
+        <div class="fs-titulo">Só convite</div>
+        <div class="fs-desc">Já passaram pela pesquisa e ainda não têm convite registrado. Grupos aparecem uma vez só.</div>
+        <div class="fs-num" id="fs-convite-num">0</div>
+      </button>
+    </div>
+    <div class="toolbar">
+      <input type="text" id="search-pessoa" placeholder="Buscar por nome, código, CNPJ ou grupo...">
+      <span id="pessoa-chips" style="display:contents;">
+        <div class="filter-chip active" data-pstatus="todos">Todos</div>
+        <div class="filter-chip" data-pstatus="a_ligar">A ligar</div>
+        <div class="filter-chip" data-pstatus="retornar">Retornar</div>
+        <div class="filter-chip" data-pstatus="nao_atendeu">Não atendeu</div>
+      </span>
+      <span id="pessoa-chips-convite" class="hidden" style="display:contents;">
+        <select id="cv-fila-nps" style="padding:9px 12px; border-radius:10px; border:1px solid var(--border); font-family:'Inter',sans-serif; font-size:13px; background:#fff;">
+          <option value="todos">NPS: todos</option>
+          <option value="respondeu">Respondeu</option>
+          <option value="nao_respondeu">Não respondeu</option>
+        </select>
+        <select id="cv-fila-tent" style="padding:9px 12px; border-radius:10px; border:1px solid var(--border); font-family:'Inter',sans-serif; font-size:13px; background:#fff;">
+          <option value="todos">Tentativas: todas</option>
+          <option value="zero">Nenhuma ainda</option>
+          <option value="tentou">Já tentou</option>
+        </select>
+      </span>
+    </div>
+    <div class="card" style="overflow-x:auto;">
+      <table>
+        <thead id="pessoa-head"></thead>
+        <tbody id="pessoa-body"></tbody>
+      </table>
+      <div id="pessoa-empty" class="empty hidden"></div>
+    </div>
+  </section>
+
+  <!-- ===== CONVITES DO EVENTO ===== -->
+  <section id="view-convites" class="view">
+    <div style="margin-bottom:16px;">
+      <div style="font-family:'Sora',sans-serif; font-weight:800; font-size:20px;">Convites · Varejo que Vende</div>
+      <div style="font-size:13px; color:var(--muted); margin-top:4px;">18/11 às 18h30 · Auditório do ICETEL · Grupos de empresas contam como 1 convidado. Clique em um cliente para alterar o convite.</div>
+    </div>
+    <div class="stats-grid" id="cv-cards" style="grid-template-columns:repeat(3, minmax(0,1fr));"></div>
+    <div class="cv-filtros">
+      <input type="text" id="cv-busca" placeholder="Buscar por cliente, código, CNPJ ou grupo...">
+      <select id="cv-pessoa"></select>
+      <select id="cv-nps">
+        <option value="todos">Nota NPS: todas</option>
+        <option value="promotor">Promotores (9 e 10)</option>
+        <option value="neutro">Neutros (7 e 8)</option>
+        <option value="detrator">Detratores (0 a 6)</option>
+        <option value="sem">Sem resposta no NPS</option>
+      </select>
+    </div>
+    <div class="card" style="overflow-x:auto;">
+      <table>
+        <thead>
+          <tr>
+            <th>Cliente / grupo</th>
+            <th>Convite</th>
+            <th>Convidado por</th>
+            <th>Data</th>
+            <th>NPS</th>
+            <th>Observação</th>
+          </tr>
+        </thead>
+        <tbody id="cv-body"></tbody>
+      </table>
+      <div id="cv-empty" class="empty hidden">Nenhum convite encontrado com esse filtro.</div>
+    </div>
+    <div class="card" style="overflow-x:auto; margin-top:20px; padding:16px 18px;">
+      <div style="font-family:'Sora',sans-serif; font-weight:700; font-size:15px; margin-bottom:8px;">Convites por pessoa</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Pessoa</th>
+            <th>Convites registrados</th>
+            <th>Foi convidado</th>
+            <th>Já se inscreveu</th>
+            <th>Disse que não ia</th>
+            <th>Não tem interesse</th>
+            <th>Na fila Só convite</th>
+            <th>Na fila Pesquisa + convite</th>
+          </tr>
+        </thead>
+        <tbody id="cv-pessoas-body"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ===== EQUIPE ===== -->
+  <section id="view-equipe" class="view">
+    <div style="margin-bottom:16px;">
+      <div style="font-family:'Sora',sans-serif; font-weight:800; font-size:20px;">Equipe de ligação</div>
+      <div style="font-size:13px; color:var(--muted); margin-top:4px;">Quem está ligando. Os contatos são divididos igualmente entre as pessoas ativas, e empresas do mesmo grupo ficam com a mesma pessoa.</div>
+    </div>
+    <div class="card" style="padding:16px 18px; margin-bottom:16px; display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
+      <input type="text" id="eq-novo-nome" placeholder="Nome da nova pessoa" style="flex:1 1 260px; padding:10px 12px; border-radius:10px; border:1px solid var(--border); font-family:'Inter',sans-serif; font-size:13px;">
+      <button type="button" class="btn btn-primary" id="btn-eq-add">Adicionar pessoa</button>
+    </div>
+    <div class="card" style="overflow-x:auto;">
+      <table>
+        <thead>
+          <tr>
+            <th>Nome</th>
+            <th>Pesquisa + convite</th>
+            <th>Só convite</th>
+            <th>Situação</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="eq-body"></tbody>
+      </table>
+      <div id="eq-empty" class="empty hidden"></div>
+    </div>
+    <div style="display:flex; flex-wrap:wrap; gap:12px; align-items:center; background:var(--amber-light); border-radius:12px; padding:14px 18px; margin-top:16px;">
+      <div style="flex:1 1 420px; font-size:13px;"><strong>Redistribuir contatos</strong><br>Divide de novo, entre as pessoas ativas, só os clientes que ainda não responderam o NPS e os que ainda não têm convite registrado. O que já foi registrado não muda, e o histórico de tentativas acompanha o contato.</div>
+      <button type="button" class="btn btn-primary" id="btn-eq-redistribuir">Redistribuir agora</button>
     </div>
   </section>
 
@@ -675,7 +839,7 @@
         <div class="pill" data-cat="Suporte (atendimento bom ou ruim)">Suporte</div>
         <div class="pill" data-cat="Preços dos serviços">Financeiro</div>
         <div class="pill" data-cat="Produto (bom ou ruim)">Produto</div>
-        <div class="pill" data-cat="Bom relacionamento com empresa">Relacionamento</div>
+        <div class="pill" data-cat="Relacionamento com empresa">Relacionamento</div>
       </div>
       <div id="comentarios-list"></div>
     </div>
@@ -703,6 +867,7 @@
       </div>
       <div class="modal-actions">
         <button class="btn btn-ghost" id="btn-fechar-realizada">Fechar</button>
+        <button class="btn btn-ghost" id="btn-convite-realizada" style="border:1px solid var(--purple); color:var(--purple);">Registrar convite</button>
         <button class="btn btn-primary" id="btn-reabrir">Reabrir pesquisa</button>
       </div>
     </div>
@@ -763,7 +928,7 @@
       <div class="field">
         <label>Qual o motivo dessa nota? <span style="color:var(--red);">*</span> <span style="font-weight:400; color:var(--muted);">— pode marcar mais de um</span></label>
         <div class="pill-options" id="f-motivo">
-          <div class="pill" data-value="Bom relacionamento com empresa">Bom relacionamento com empresa</div>
+          <div class="pill" data-value="Relacionamento com empresa">Relacionamento com empresa</div>
           <div class="pill" data-value="Preços dos serviços">Preços dos serviços</div>
           <div class="pill" data-value="Produto (bom ou ruim)">Produto (bom ou ruim)</div>
           <div class="pill" data-value="Suporte (atendimento bom ou ruim)">Suporte (atendimento bom ou ruim)</div>
@@ -797,6 +962,25 @@
     <div class="field">
       <label>Observação interna</label>
       <textarea id="f-obs" placeholder="Anotações internas sobre essa ligação"></textarea>
+    </div>
+
+    <!-- Bloco: convite do evento (junto com a pesquisa) -->
+    <div id="bloco-convite-form" class="convite-box">
+      <h3>Convite · Varejo que Vende (18/11)</h3>
+      <div id="convite-form-grupo" class="hidden" style="background:var(--amber-light); color:var(--amber); border-radius:10px; padding:8px 12px; font-size:12px; font-weight:600; margin-bottom:10px;"></div>
+      <div id="convite-form-atual" class="hidden" style="font-size:12px; color:var(--muted); margin-bottom:8px;"></div>
+      <div class="field">
+        <label>Resultado do convite <span style="font-weight:400; color:var(--muted);">(deixe sem marcar se não falou do evento)</span></label>
+        <div class="pill-options" id="f-convite"></div>
+      </div>
+      <div class="field">
+        <label>Observação do convite</label>
+        <textarea id="f-convite-obs" placeholder="Ex.: vai levar mais 2 pessoas"></textarea>
+      </div>
+      <div class="field" style="margin-bottom:0;">
+        <label>Convidado por</label>
+        <select id="f-convite-por"></select>
+      </div>
     </div>
 
     <div class="modal-actions">
@@ -892,6 +1076,37 @@
     <div id="eg-lista" style="max-height:280px; overflow-y:auto; margin-bottom:8px;"></div>
     <div class="modal-actions">
       <button class="btn btn-ghost" id="btn-eg-cancelar">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL DE CONVITE ===== -->
+<div class="overlay" id="overlay-convite">
+  <div class="modal" style="max-width:560px;">
+    <h2 id="cvm-nome">Cliente</h2>
+    <div class="sub" id="cvm-sub"></div>
+    <div id="cvm-grupo" class="hidden" style="background:var(--amber-light); color:var(--amber); border-radius:10px; padding:8px 12px; font-size:12px; font-weight:600; margin:-8px 0 14px 0;"></div>
+    <div class="card" id="cvm-nps" style="padding:12px 16px; margin-bottom:14px; font-size:13px; line-height:1.6;"></div>
+    <div class="field" id="cvm-hist-wrap">
+      <label>Tentativas de convite</label>
+      <div class="card" style="padding:4px 14px; max-height:140px; overflow-y:auto;" id="cvm-hist"></div>
+    </div>
+    <div class="field">
+      <label>Resultado do convite</label>
+      <div class="pill-options" id="cvm-status"></div>
+    </div>
+    <div class="field">
+      <label>Observação</label>
+      <textarea id="cvm-obs" placeholder="Ex.: vai levar mais 2 pessoas"></textarea>
+    </div>
+    <div class="field">
+      <label>Ligando como</label>
+      <select id="cvm-por"></select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="btn-cvm-cancelar">Cancelar</button>
+      <button class="btn btn-ghost" id="btn-cvm-nao-atendeu" style="border:1px solid var(--border);">Não atendeu</button>
+      <button class="btn btn-primary" id="btn-cvm-salvar">Salvar convite</button>
     </div>
   </div>
 </div>
@@ -997,10 +1212,18 @@ document.querySelectorAll(".tab-btn").forEach(btn => {
     document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
     btn.classList.add("active");
     document.getElementById("view-" + btn.dataset.view).classList.add("active");
+    if (btn.dataset.view === "pessoa") {
+      if (currentPessoa) history.replaceState(null, "", "#pessoa" + currentPessoa);
+      renderPessoa();
+    } else {
+      history.replaceState(null, "", location.pathname + location.search);
+    }
     if (btn.dataset.view === "dashboard") { renderDashboard(); renderComentarios(currentComentarioCat); }
     if (btn.dataset.view === "agenda") renderAgenda();
     if (btn.dataset.view === "respostas") renderRespostas();
     if (btn.dataset.view === "grupos") renderGrupos();
+    if (btn.dataset.view === "convites") renderConvites();
+    if (btn.dataset.view === "equipe") renderEquipe();
   });
 });
 
@@ -1056,7 +1279,17 @@ async function loadData() {
     }
     historico = hData || [];
 
+    const { data: eData, error: eErr } = await db.from("equipe").select("*").order("id");
+    if (eErr) {
+      console.error(eErr);
+      showError("Erro ao carregar a equipe: " + eErr.message + " (confira se o SQL da tabela equipe foi executado no Supabase).");
+    }
+    equipe = eData || [];
+
     renderFila();
+    renderPessoa();
+    renderConvites();
+    renderEquipe();
     renderAgenda();
     renderRespostas();
     renderGrupos();
@@ -1157,6 +1390,596 @@ function renderFila() {
   });
   atualizarSelecaoFila();
 }
+
+// ---------- Equipe, Minha fila e Convites do evento ----------
+const STATUS_PENDENTES = ["a_ligar", "retornar", "nao_atendeu"];
+const CONVITE_STATUS = {
+  convidado: "Foi convidado",
+  inscrito: "Já se inscreveu",
+  nao_vai: "Disse que não ia",
+  sem_interesse: "Não tem interesse"
+};
+const CHAVE_PESSOA_LOCAL = "nps_f5_pessoa_atual";
+let equipe = [];
+let currentPessoa = null;
+let currentFilaPessoa = "pesquisa"; // "pesquisa" ou "convite"
+let currentPessoaStatus = "todos";
+let currentPessoaSearch = "";
+let currentCvFiltro = "todos";
+let conviteCliente = null;
+let cvmStatus = null;
+let formConviteStatus = null;
+
+try { const salvo = Number(localStorage.getItem(CHAVE_PESSOA_LOCAL)); if (salvo) currentPessoa = salvo; } catch (e) {}
+
+function ehPendente(c) { return STATUS_PENDENTES.includes(c.status); }
+function equipeAtiva() { return equipe.filter(p => p.ativo); }
+function idsAtivos() { return equipeAtiva().map(p => p.id); }
+function nomePessoa(id) {
+  if (!id) return "—";
+  const p = equipe.find(x => x.id === Number(id));
+  return p ? p.nome : "Pessoa " + id;
+}
+function temResponsavelAtivo(c) { return !!c.responsavel && idsAtivos().includes(Number(c.responsavel)); }
+// Precisa de convite: já saiu da fila do NPS e ainda não tem resultado de convite
+function precisaConvite(c) { return !ehPendente(c) && !c.convite_status; }
+function chaveBloco(c) { return c.grupo_empresarial ? "g:" + normalizarNome(c.grupo_empresarial) : "c:" + c.id; }
+function membrosDoBloco(c) { return c.grupo_empresarial ? membrosDoGrupo(c.grupo_empresarial) : [c]; }
+function umPorBloco(lista) {
+  const vistos = new Set();
+  return lista.filter(c => { const k = chaveBloco(c); if (vistos.has(k)) return false; vistos.add(k); return true; });
+}
+function respostaDoBloco(c) {
+  for (const m of membrosDoBloco(c)) { const r = respostaDoCliente(m.id); if (r) return r; }
+  return null;
+}
+function categoriaNps(nota) {
+  if (nota === null || nota === undefined) return null;
+  if (nota >= 9) return "promotor";
+  if (nota >= 7) return "neutro";
+  return "detrator";
+}
+const CATEGORIA_LABEL = { promotor: "Promotor", neutro: "Neutro", detrator: "Detrator" };
+function npsBadge(c) {
+  const r = respostaDoBloco(c);
+  if (!r) return `<span class="badge ${c.status}">${STATUS_LABEL[c.status] || c.status}</span>`;
+  const cat = categoriaNps(r.nota);
+  return `<span class="badge nps-${cat}">${r.nota} · ${CATEGORIA_LABEL[cat]}</span>`;
+}
+function conviteBadge(c) {
+  if (c.convite_status) return `<span class="badge cv-${c.convite_status}">${CONVITE_STATUS[c.convite_status]}</span>`;
+  const n = (c.convite_historico || []).length;
+  return n ? `<span class="badge cv-tentativa">Não atendeu (${n}x)</span>` : `<span class="badge cv-tentativa">Sem convite</span>`;
+}
+function textoBusca(c) {
+  return [c.nome, c.nome_fantasia, c.grupo_empresarial, c.codigo, c.cnpj_cpf].map(v => String(v || "").toLowerCase()).join(" ");
+}
+function dataHora(iso) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  return d.toLocaleDateString("pt-BR") + " " + d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+}
+function preencherSelectPessoas(sel, valor) {
+  sel.innerHTML = equipeAtiva().map(p => `<option value="${p.id}">${escapeHtml(p.nome)}</option>`).join("");
+  const v = valor && idsAtivos().includes(Number(valor)) ? valor : (currentPessoa || (equipeAtiva()[0] || {}).id);
+  if (v) sel.value = String(v);
+}
+function garantirPessoaAtual() {
+  const ativos = idsAtivos();
+  if (!ativos.length) return; // equipe ainda não carregada: mantém a escolha atual
+  if (!currentPessoa || !ativos.includes(currentPessoa)) currentPessoa = ativos[0];
+}
+function escolherPessoa(id) {
+  currentPessoa = Number(id);
+  try { localStorage.setItem(CHAVE_PESSOA_LOCAL, String(currentPessoa)); } catch (e) {}
+  history.replaceState(null, "", "#pessoa" + currentPessoa);
+  renderPessoa();
+}
+function botaoCopiar(tr, c) {
+  const copyBtn = tr.querySelector(".copy-icon-btn");
+  if (!copyBtn) return;
+  copyBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    copiarNumero(melhorNumero(c), null);
+    const original = copyBtn.textContent;
+    copyBtn.textContent = "✓";
+    setTimeout(() => { copyBtn.textContent = original; }, 1200);
+  });
+}
+function celulaCliente(c) {
+  return `<td><strong>${escapeHtml(nomeComCodigo(c))}</strong>${c.grupo_empresarial ? `<br><span class="badge" style="margin-top:4px; background:var(--purple-light); color:var(--purple);">${escapeHtml(c.grupo_empresarial)} · ${membrosDoGrupo(c.grupo_empresarial).length} CNPJs</span>` : ""}</td>`;
+}
+function celulaTelefone(c) {
+  return `<td>${escapeHtml(melhorNumero(c))}${melhorNumero(c) !== "—" ? '<button type="button" class="copy-icon-btn" title="Copiar número">⧉</button>' : ""}</td>`;
+}
+
+// ---------- Minha fila ----------
+document.getElementById("search-pessoa").addEventListener("input", (e) => {
+  currentPessoaSearch = e.target.value.toLowerCase();
+  renderPessoa();
+});
+document.querySelectorAll("#pessoa-chips .filter-chip").forEach(chip => {
+  chip.addEventListener("click", () => {
+    document.querySelectorAll("#pessoa-chips .filter-chip").forEach(c => c.classList.remove("active"));
+    chip.classList.add("active");
+    currentPessoaStatus = chip.dataset.pstatus;
+    renderPessoa();
+  });
+});
+let currentConviteNps = "todos";
+let currentConviteTent = "todos";
+document.getElementById("cv-fila-nps").addEventListener("change", (e) => { currentConviteNps = e.target.value; renderPessoa(); });
+document.getElementById("cv-fila-tent").addEventListener("change", (e) => { currentConviteTent = e.target.value; renderPessoa(); });
+document.getElementById("fs-pesquisa").addEventListener("click", () => { currentFilaPessoa = "pesquisa"; renderPessoa(); });
+document.getElementById("fs-convite").addEventListener("click", () => { currentFilaPessoa = "convite"; renderPessoa(); });
+
+function filaPesquisaDe(pid) { return clientes.filter(c => Number(c.responsavel) === pid && ehPendente(c)); }
+function filaConviteDe(pid) { return umPorBloco(clientes.filter(c => Number(c.responsavel) === pid && precisaConvite(c))); }
+function semResponsavelParaDistribuir() {
+  return clientes.filter(c => (ehPendente(c) || precisaConvite(c)) && !temResponsavelAtivo(c));
+}
+
+function renderPessoa() {
+  garantirPessoaAtual();
+  const seletor = document.getElementById("pessoa-seletor");
+  seletor.innerHTML = "";
+  if (!equipeAtiva().length) {
+    seletor.innerHTML = '<span style="font-size:13px; color:var(--muted);">Nenhuma pessoa ativa. Cadastre a equipe na aba Equipe.</span>';
+  }
+  equipeAtiva().forEach(p => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "pessoa-pill" + (p.id === currentPessoa ? " active" : "");
+    b.textContent = p.nome;
+    b.addEventListener("click", () => escolherPessoa(p.id));
+    seletor.appendChild(b);
+  });
+
+  const semResp = semResponsavelParaDistribuir();
+  document.getElementById("pessoa-distribuir").classList.toggle("hidden", semResp.length === 0 || !equipeAtiva().length);
+  document.getElementById("pessoa-distribuir-texto").textContent =
+    `${semResp.length} cliente(s) sem responsável (pesquisa pendente ou aguardando convite).`;
+
+  const filaP = currentPessoa ? filaPesquisaDe(currentPessoa) : [];
+  const filaC = currentPessoa ? filaConviteDe(currentPessoa) : [];
+  document.getElementById("fs-pesquisa-num").textContent = filaP.length;
+  document.getElementById("fs-convite-num").textContent = filaC.length;
+  document.getElementById("fs-pesquisa").classList.toggle("active", currentFilaPessoa === "pesquisa");
+  document.getElementById("fs-convite").classList.toggle("active", currentFilaPessoa === "convite");
+  document.getElementById("pessoa-chips").classList.toggle("hidden", currentFilaPessoa !== "pesquisa");
+  document.getElementById("pessoa-chips-convite").classList.toggle("hidden", currentFilaPessoa !== "convite");
+
+  const head = document.getElementById("pessoa-head");
+  const tbody = document.getElementById("pessoa-body");
+  const empty = document.getElementById("pessoa-empty");
+  tbody.innerHTML = "";
+  const s = currentPessoaSearch;
+
+  if (currentFilaPessoa === "pesquisa") {
+    head.innerHTML = "<tr><th>Cliente</th><th>Município/UF</th><th>Telefone</th><th>Status</th><th>Tentativas</th><th>Último contato</th></tr>";
+    const list = filaP.filter(c => (currentPessoaStatus === "todos" || c.status === currentPessoaStatus) && (!s || textoBusca(c).includes(s)));
+    if (list.length === 0) {
+      empty.classList.remove("hidden");
+      empty.textContent = filaP.length === 0 ? "Nenhuma pesquisa pendente para esta pessoa." : "Nenhum cliente encontrado com esse filtro/busca.";
+      return;
+    }
+    empty.classList.add("hidden");
+    list.forEach(c => {
+      const tr = document.createElement("tr");
+      const retornoTxt = c.status === "retornar" && c.data_retorno
+        ? `<br><span style="font-size:11px; color:var(--muted);">${new Date(c.data_retorno).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}</span>` : "";
+      tr.innerHTML = `
+        ${celulaCliente(c)}
+        <td>${escapeHtml([c.municipio, c.uf].filter(Boolean).join("/"))}</td>
+        ${celulaTelefone(c)}
+        <td><span class="badge ${c.status}">${STATUS_LABEL[c.status] || c.status}</span>${retornoTxt}</td>
+        <td style="text-align:center;">${c.tentativas || 0}</td>
+        <td>${c.data_contato ? new Date(c.data_contato).toLocaleDateString("pt-BR") : "—"}</td>
+      `;
+      botaoCopiar(tr, c);
+      tr.addEventListener("click", () => openModal(c));
+      tbody.appendChild(tr);
+    });
+  } else {
+    head.innerHTML = "<tr><th>Cliente</th><th>Telefone</th><th>NPS</th><th>Tentativas de convite</th><th>Última tentativa</th></tr>";
+    const list = filaC.filter(c => {
+      if (s && !membrosDoBloco(c).some(m => textoBusca(m).includes(s))) return false;
+      const respondeu = !!respostaDoBloco(c);
+      if (currentConviteNps === "respondeu" && !respondeu) return false;
+      if (currentConviteNps === "nao_respondeu" && respondeu) return false;
+      const tent = (c.convite_historico || []).length;
+      if (currentConviteTent === "zero" && tent > 0) return false;
+      if (currentConviteTent === "tentou" && tent === 0) return false;
+      return true;
+    });
+    if (list.length === 0) {
+      empty.classList.remove("hidden");
+      empty.textContent = filaC.length === 0 ? "Nenhum convite pendente para esta pessoa." : "Nenhum cliente encontrado com esse filtro/busca.";
+      return;
+    }
+    empty.classList.add("hidden");
+    list.forEach(c => {
+      const hist = c.convite_historico || [];
+      const ult = hist.length ? hist[hist.length - 1] : null;
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        ${celulaCliente(c)}
+        ${celulaTelefone(c)}
+        <td>${npsBadge(c)}</td>
+        <td style="text-align:center;">${hist.length}</td>
+        <td>${ult ? dataHora(ult.data) + " · " + escapeHtml(nomePessoa(ult.pessoa)) : "—"}</td>
+      `;
+      botaoCopiar(tr, c);
+      tr.addEventListener("click", () => abrirConvite(c));
+      tbody.appendChild(tr);
+    });
+  }
+}
+
+// ---------- Distribuição ----------
+document.getElementById("btn-distribuir").addEventListener("click", () => {
+  const semResp = semResponsavelParaDistribuir();
+  if (semResp.length === 0) return;
+  abrirConfirmacao({
+    titulo: "Distribuir clientes",
+    texto: `Os ${semResp.length} clientes sem responsável serão divididos igualmente entre ${equipeAtiva().map(p => p.nome).join(", ")}. Empresas do mesmo grupo ficam com a mesma pessoa. Quem já tem responsável ativo não muda.`,
+    botao: "Distribuir",
+    onSim: () => distribuirClientes(false)
+  });
+});
+
+// redistribuirTudo = false: só quem está sem responsável ativo
+// redistribuirTudo = true: todos os pendentes (pesquisa ou convite) são divididos de novo
+async function distribuirClientes(redistribuirTudo) {
+  const ativos = idsAtivos();
+  if (!ativos.length) { alert("Nenhuma pessoa ativa na equipe."); return; }
+  const candidatos = clientes.filter(c => (ehPendente(c) || precisaConvite(c)) && (redistribuirTudo || !temResponsavelAtivo(c)));
+  if (!candidatos.length) return;
+
+  const blocos = new Map();
+  candidatos.forEach(c => {
+    const k = chaveBloco(c);
+    if (!blocos.has(k)) blocos.set(k, []);
+    blocos.get(k).push(c);
+  });
+
+  const carga = {};
+  ativos.forEach(p => {
+    carga[p] = redistribuirTudo ? 0 : clientes.filter(c => (ehPendente(c) || precisaConvite(c)) && Number(c.responsavel) === p).length;
+  });
+
+  // Na distribuição normal, se o grupo já tem alguém ativo responsável, o bloco vai para essa pessoa
+  const donoDoGrupo = {};
+  if (!redistribuirTudo) {
+    clientes.forEach(c => {
+      if (c.grupo_empresarial && temResponsavelAtivo(c)) donoDoGrupo[chaveBloco(c)] = Number(c.responsavel);
+    });
+  }
+
+  const destino = {}; ativos.forEach(p => destino[p] = []);
+  [...blocos.entries()].sort((a, b) => b[1].length - a[1].length).forEach(([chave, membros]) => {
+    let p = donoDoGrupo[chave];
+    if (!p) p = ativos.reduce((min, x) => carga[x] < carga[min] ? x : min, ativos[0]);
+    destino[p].push(...membros.map(m => m.id));
+    carga[p] += membros.length;
+  });
+
+  for (const p of ativos) {
+    if (destino[p].length === 0) continue;
+    const { error } = await db.from("clientes").update({ responsavel: p }).in("id", destino[p]);
+    if (error) {
+      console.error(error);
+      showError("Erro ao distribuir clientes: " + error.message);
+      return;
+    }
+  }
+  await loadData();
+}
+
+// Abre direto na fila da pessoa se o link tiver #pessoa1, #pessoa2...
+(function abrirPessoaPeloLink() {
+  const m = location.hash.match(/^#pessoa(\d+)$/);
+  if (!m) return;
+  currentPessoa = Number(m[1]);
+  const btn = document.querySelector('.tab-btn[data-view="pessoa"]');
+  if (btn) btn.click();
+})();
+
+// ---------- Registro do convite ----------
+// tipo: um código de CONVITE_STATUS ou "nao_atendeu". Grava em todos os CNPJs do grupo.
+async function registrarConvite(cliente, tipo, obs, pessoaId) {
+  const agora = new Date().toISOString();
+  const entrada = { tipo, obs: obs || null, pessoa: pessoaId ? Number(pessoaId) : null, data: agora };
+  for (const m of membrosDoBloco(cliente)) {
+    const atual = clientes.find(x => x.id === m.id) || m;
+    const updates = { convite_historico: [...(atual.convite_historico || []), entrada] };
+    if (tipo !== "nao_atendeu") {
+      updates.convite_status = tipo;
+      updates.convite_obs = obs || null;
+      updates.convite_por = entrada.pessoa;
+      updates.convite_data = agora;
+    }
+    const { error } = await db.from("clientes").update(updates).eq("id", m.id);
+    if (error) { console.error(error); alert("Erro ao salvar o convite: " + error.message); return false; }
+  }
+  return true;
+}
+
+function montarPillsConvite(containerId, onPick) {
+  const box = document.getElementById(containerId);
+  box.innerHTML = "";
+  Object.entries(CONVITE_STATUS).forEach(([cod, label]) => {
+    const d = document.createElement("div");
+    d.className = "pill";
+    d.dataset.convite = cod;
+    d.textContent = label;
+    d.addEventListener("click", () => {
+      const jaMarcado = d.classList.contains("selected");
+      box.querySelectorAll(".pill").forEach(p => p.classList.remove("selected"));
+      if (!jaMarcado) d.classList.add("selected");
+      onPick(jaMarcado ? null : cod);
+    });
+    box.appendChild(d);
+  });
+}
+montarPillsConvite("cvm-status", cod => { cvmStatus = cod; });
+montarPillsConvite("f-convite", cod => { formConviteStatus = cod; });
+
+function marcarPill(containerId, cod) {
+  document.querySelectorAll(`#${containerId} .pill`).forEach(p => p.classList.toggle("selected", p.dataset.convite === cod));
+}
+function textoGrupoConvite(c) {
+  return c.grupo_empresarial
+    ? `Grupo ${c.grupo_empresarial} (${membrosDoGrupo(c.grupo_empresarial).length} CNPJs): o convite vale para o grupo todo e conta como 1 convidado.`
+    : "";
+}
+
+function abrirConvite(cliente) {
+  conviteCliente = cliente;
+  cvmStatus = cliente.convite_status || null;
+  document.getElementById("cvm-nome").textContent = nomeComCodigo(cliente);
+  document.getElementById("cvm-sub").textContent = [cliente.cnpj_cpf, melhorNumero(cliente)].filter(Boolean).join(" · ");
+  const g = document.getElementById("cvm-grupo");
+  g.textContent = textoGrupoConvite(cliente);
+  g.classList.toggle("hidden", !cliente.grupo_empresarial);
+
+  const r = respostaDoBloco(cliente);
+  document.getElementById("cvm-nps").innerHTML = r
+    ? `${npsBadge(cliente)} <span style="color:var(--muted);">Respondeu em ${new Date(r.data).toLocaleDateString("pt-BR")}${r.nome_respondente ? " (" + escapeHtml(r.nome_respondente) + ")" : ""}</span>${r.sugestao ? `<div style="margin-top:6px;">"${escapeHtml(r.sugestao)}"</div>` : ""}`
+    : `Pesquisa NPS: ${npsBadge(cliente)}`;
+
+  const hist = [...(cliente.convite_historico || [])].reverse();
+  document.getElementById("cvm-hist-wrap").style.display = hist.length ? "block" : "none";
+  document.getElementById("cvm-hist").innerHTML = hist.map(h => `
+    <div class="hist-item">
+      <span>${h.tipo === "nao_atendeu" ? "Não atendeu" : escapeHtml(CONVITE_STATUS[h.tipo] || h.tipo)}${h.obs ? " · " + escapeHtml(h.obs) : ""}</span>
+      <span class="h-data">${dataHora(h.data)} · ${escapeHtml(nomePessoa(h.pessoa))}</span>
+    </div>`).join("");
+
+  marcarPill("cvm-status", cvmStatus);
+  document.getElementById("cvm-obs").value = cliente.convite_obs || "";
+  preencherSelectPessoas(document.getElementById("cvm-por"), currentPessoa);
+  document.getElementById("overlay-convite").classList.add("active");
+}
+
+function fecharConvite() {
+  document.getElementById("overlay-convite").classList.remove("active");
+  conviteCliente = null;
+}
+document.getElementById("btn-cvm-cancelar").addEventListener("click", fecharConvite);
+
+document.getElementById("btn-cvm-nao-atendeu").addEventListener("click", async () => {
+  if (!conviteCliente) return;
+  const pessoa = document.getElementById("cvm-por").value;
+  if (!pessoa) { alert("Selecione quem está ligando."); return; }
+  const ok = await registrarConvite(conviteCliente, "nao_atendeu", document.getElementById("cvm-obs").value.trim(), pessoa);
+  if (!ok) return;
+  fecharConvite();
+  await loadData();
+});
+
+document.getElementById("btn-cvm-salvar").addEventListener("click", async () => {
+  if (!conviteCliente) return;
+  if (!cvmStatus) { alert("Selecione o resultado do convite (ou use o botão Não atendeu)."); return; }
+  const pessoa = document.getElementById("cvm-por").value;
+  if (!pessoa) { alert("Selecione quem está ligando."); return; }
+  const btn = document.getElementById("btn-cvm-salvar");
+  btn.disabled = true;
+  const ok = await registrarConvite(conviteCliente, cvmStatus, document.getElementById("cvm-obs").value.trim(), pessoa);
+  btn.disabled = false;
+  if (!ok) return;
+  fecharConvite();
+  await loadData();
+});
+
+document.getElementById("btn-convite-realizada").addEventListener("click", () => {
+  const c = selectedCliente;
+  document.getElementById("overlay").classList.remove("active");
+  if (c) abrirConvite(c);
+});
+
+// Prepara o bloco de convite dentro do formulário do NPS
+function prepararConviteNoFormulario(cliente) {
+  formConviteStatus = null;
+  marcarPill("f-convite", null);
+  document.getElementById("f-convite-obs").value = "";
+  preencherSelectPessoas(document.getElementById("f-convite-por"), currentPessoa);
+  const g = document.getElementById("convite-form-grupo");
+  g.textContent = textoGrupoConvite(cliente);
+  g.classList.toggle("hidden", !cliente.grupo_empresarial);
+  const atual = document.getElementById("convite-form-atual");
+  if (cliente.convite_status) {
+    atual.textContent = `Já registrado: ${CONVITE_STATUS[cliente.convite_status]} (por ${nomePessoa(cliente.convite_por)} em ${dataHora(cliente.convite_data)}). Marque de novo só se quiser alterar.`;
+    atual.classList.remove("hidden");
+  } else {
+    atual.classList.add("hidden");
+  }
+  atualizarVisibilidadeConviteForm();
+}
+function atualizarVisibilidadeConviteForm() {
+  const semConversa = modalStatus === "nao_atendeu" || modalStatus === "sem_sucesso";
+  document.getElementById("bloco-convite-form").classList.toggle("hidden", semConversa);
+}
+
+// ---------- Painel de convites ----------
+document.getElementById("cv-busca").addEventListener("input", renderConvites);
+document.getElementById("cv-pessoa").addEventListener("change", renderConvites);
+document.getElementById("cv-nps").addEventListener("change", renderConvites);
+
+function renderConvites() {
+  const selPessoa = document.getElementById("cv-pessoa");
+  const valorPessoa = selPessoa.value || "todos";
+  selPessoa.innerHTML = '<option value="todos">Convidado por: todos</option>' +
+    equipe.map(p => `<option value="${p.id}">${escapeHtml(p.nome)}</option>`).join("");
+  selPessoa.value = [...selPessoa.options].some(o => o.value === valorPessoa) ? valorPessoa : "todos";
+
+  // Um registro por grupo (ou cliente sem grupo) que já teve alguma ação de convite
+  const blocos = umPorBloco(clientes.filter(c => c.convite_status || (c.convite_historico || []).length));
+  const comStatus = blocos.filter(c => c.convite_status);
+  const conta = cod => comStatus.filter(c => c.convite_status === cod).length;
+  const cards = [
+    ["todos", "Convites registrados", comStatus.length],
+    ["inscrito", CONVITE_STATUS.inscrito, conta("inscrito")],
+    ["convidado", CONVITE_STATUS.convidado, conta("convidado")],
+    ["nao_vai", CONVITE_STATUS.nao_vai, conta("nao_vai")],
+    ["sem_interesse", CONVITE_STATUS.sem_interesse, conta("sem_interesse")],
+    ["tentativa", "Só tentativa (não atendeu)", blocos.length - comStatus.length]
+  ];
+  const cardsBox = document.getElementById("cv-cards");
+  cardsBox.innerHTML = "";
+  cards.forEach(([cod, label, n]) => {
+    const d = document.createElement("div");
+    d.className = "card stat-card clicavel" + (currentCvFiltro === cod ? " active" : "");
+    d.innerHTML = `<div class="stat-label">${escapeHtml(label)}</div><div class="stat-value">${n}</div>`;
+    d.addEventListener("click", () => { currentCvFiltro = cod; renderConvites(); });
+    cardsBox.appendChild(d);
+  });
+
+  const busca = document.getElementById("cv-busca").value.toLowerCase().trim();
+  const fNps = document.getElementById("cv-nps").value;
+  let list = currentCvFiltro === "todos" ? comStatus
+    : currentCvFiltro === "tentativa" ? blocos.filter(c => !c.convite_status)
+    : comStatus.filter(c => c.convite_status === currentCvFiltro);
+  list = list.filter(c => {
+    if (busca && !membrosDoBloco(c).some(m => textoBusca(m).includes(busca))) return false;
+    if (valorPessoa !== "todos") {
+      const quem = c.convite_status ? c.convite_por : ((c.convite_historico || []).slice(-1)[0] || {}).pessoa;
+      if (String(quem) !== valorPessoa) return false;
+    }
+    if (fNps !== "todos") {
+      const r = respostaDoBloco(c);
+      const cat = r ? categoriaNps(r.nota) : "sem";
+      if (cat !== fNps) return false;
+    }
+    return true;
+  }).sort((a, b) => new Date(b.convite_data || 0) - new Date(a.convite_data || 0));
+
+  const tbody = document.getElementById("cv-body");
+  tbody.innerHTML = "";
+  document.getElementById("cv-empty").classList.toggle("hidden", list.length > 0);
+  list.forEach(c => {
+    const ult = (c.convite_historico || []).slice(-1)[0] || {};
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      ${celulaCliente(c)}
+      <td>${conviteBadge(c)}</td>
+      <td>${escapeHtml(nomePessoa(c.convite_status ? c.convite_por : ult.pessoa))}</td>
+      <td>${dataHora(c.convite_status ? c.convite_data : ult.data)}</td>
+      <td>${npsBadge(c)}</td>
+      <td style="max-width:260px;">${escapeHtml(c.convite_status ? (c.convite_obs || "") : (ult.obs || ""))}</td>
+    `;
+    tr.style.cursor = "pointer";
+    tr.addEventListener("click", () => abrirConvite(c));
+    tbody.appendChild(tr);
+  });
+
+  // Por pessoa
+  const pb = document.getElementById("cv-pessoas-body");
+  pb.innerHTML = "";
+  equipe.forEach(p => {
+    const meus = comStatus.filter(c => Number(c.convite_por) === p.id);
+    const n = cod => meus.filter(c => c.convite_status === cod).length;
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><strong>${escapeHtml(p.nome)}</strong>${p.ativo ? "" : ' <span style="font-size:11px; color:var(--muted);">(inativa)</span>'}</td>
+      <td style="text-align:center;">${meus.length}</td>
+      <td style="text-align:center;">${n("convidado")}</td>
+      <td style="text-align:center;">${n("inscrito")}</td>
+      <td style="text-align:center;">${n("nao_vai")}</td>
+      <td style="text-align:center;">${n("sem_interesse")}</td>
+      <td style="text-align:center;">${filaConviteDe(p.id).length}</td>
+      <td style="text-align:center;">${filaPesquisaDe(p.id).length}</td>
+    `;
+    pb.appendChild(tr);
+  });
+}
+
+// ---------- Equipe ----------
+function renderEquipe() {
+  const tbody = document.getElementById("eq-body");
+  const empty = document.getElementById("eq-empty");
+  tbody.innerHTML = "";
+  empty.classList.toggle("hidden", equipe.length > 0);
+  empty.textContent = "Nenhuma pessoa cadastrada. Confira se o SQL da equipe foi executado no Supabase.";
+  equipe.forEach(p => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><input type="text" class="eq-nome" value="${escapeHtml(p.nome)}" style="padding:8px 10px; border-radius:8px; border:1px solid var(--border); font-family:'Inter',sans-serif; font-size:13px; width:100%; max-width:260px;"></td>
+      <td style="text-align:center;">${filaPesquisaDe(p.id).length}</td>
+      <td style="text-align:center;">${filaConviteDe(p.id).length}</td>
+      <td><span class="badge" style="background:${p.ativo ? "var(--green-light)" : "#EFEEEA"}; color:${p.ativo ? "#1E7F50" : "var(--muted)"};">${p.ativo ? "Ativa" : "Inativa"}</span></td>
+      <td style="text-align:right; white-space:nowrap;">
+        <button type="button" class="btn btn-ghost eq-salvar" style="border:1px solid var(--border); padding:8px 12px;">Salvar nome</button>
+        <button type="button" class="btn btn-ghost eq-ativo" style="border:1px solid var(--border); padding:8px 12px;">${p.ativo ? "Desativar" : "Reativar"}</button>
+      </td>
+    `;
+    tr.querySelector(".eq-salvar").addEventListener("click", async () => {
+      const nome = tr.querySelector(".eq-nome").value.trim();
+      if (!nome) { alert("Informe um nome."); return; }
+      const { error } = await db.from("equipe").update({ nome }).eq("id", p.id);
+      if (error) { alert("Erro ao salvar o nome: " + error.message); return; }
+      await loadData();
+    });
+    tr.querySelector(".eq-ativo").addEventListener("click", () => {
+      const desativando = p.ativo;
+      abrirConfirmacao({
+        titulo: desativando ? "Desativar pessoa" : "Reativar pessoa",
+        texto: desativando
+          ? `${p.nome} deixa de aparecer na Minha fila. Os contatos pendentes dela ficam sem responsável até você clicar em Distribuir ou Redistribuir. O que ela já registrou continua no histórico.`
+          : `${p.nome} volta a aparecer na Minha fila. Para ela receber contatos, use Redistribuir agora.`,
+        botao: desativando ? "Desativar" : "Reativar",
+        onSim: async () => {
+          const { error } = await db.from("equipe").update({ ativo: !p.ativo }).eq("id", p.id);
+          if (error) { alert("Erro: " + error.message); return; }
+          await loadData();
+        }
+      });
+    });
+    tbody.appendChild(tr);
+  });
+}
+
+document.getElementById("btn-eq-add").addEventListener("click", async () => {
+  const input = document.getElementById("eq-novo-nome");
+  const nome = input.value.trim();
+  if (!nome) { alert("Informe o nome da pessoa."); return; }
+  const novoId = equipe.reduce((m, p) => Math.max(m, p.id), 0) + 1;
+  const { error } = await db.from("equipe").insert({ id: novoId, nome, ativo: true });
+  if (error) { alert("Erro ao adicionar: " + error.message); return; }
+  input.value = "";
+  await loadData();
+});
+
+document.getElementById("btn-eq-redistribuir").addEventListener("click", () => {
+  const n = clientes.filter(c => ehPendente(c) || precisaConvite(c)).length;
+  if (!n) { alert("Não há contatos pendentes para redistribuir."); return; }
+  abrirConfirmacao({
+    titulo: "Redistribuir contatos",
+    texto: `${n} contatos pendentes (pesquisa ou convite) serão divididos de novo entre ${equipeAtiva().map(p => p.nome).join(", ")}. Empresas do mesmo grupo ficam com a mesma pessoa. O que já foi registrado não muda.`,
+    botao: "Redistribuir",
+    onSim: () => distribuirClientes(true)
+  });
+});
 
 // ---------- Agenda ----------
 document.querySelectorAll("#view-agenda .filter-chip").forEach(chip => {
@@ -2248,6 +3071,7 @@ function openModal(cliente) {
   modalTelefones = buildTelefonesIniciais(cliente);
   renderTelefonesUI();
   renderHistoricoModal(cliente.id);
+  prepararConviteNoFormulario(cliente);
 
   // se o cliente já tem um retorno agendado, mostra a data/hora atual pra edição
   if (cliente.status === "retornar" && cliente.data_retorno) {
@@ -2283,6 +3107,7 @@ document.querySelectorAll(".status-options .pill").forEach(pill => {
     modalStatus = pill.dataset.status;
     document.getElementById("bloco-pesquisa").classList.toggle("hidden", modalStatus !== "concluido");
     document.getElementById("bloco-retornar").classList.toggle("hidden", modalStatus !== "retornar");
+    atualizarVisibilidadeConviteForm();
   });
 });
 
@@ -2419,6 +3244,12 @@ document.getElementById("btn-salvar").addEventListener("click", async () => {
         obs_interna: resposta.obs_interna || ""
       });
     }
+  }
+
+  // Convite do evento registrado na mesma ligação
+  if (formConviteStatus && modalStatus !== "nao_atendeu" && modalStatus !== "sem_sucesso") {
+    const pessoaConvite = document.getElementById("f-convite-por").value;
+    await registrarConvite(selectedCliente, formConviteStatus, document.getElementById("f-convite-obs").value.trim(), pessoaConvite);
   }
 
   const clienteSalvo = selectedCliente;
