@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -489,6 +490,11 @@
     .dash-row{grid-template-columns:1fr;}
     header, main{padding-left:16px; padding-right:16px;}
   }
+  th.ordenavel{cursor:pointer; user-select:none; white-space:nowrap;}
+  th.ordenavel:hover{color:var(--ink);}
+  th.ordenavel .seta{display:inline-block; margin-left:4px; font-size:10px; opacity:0.35;}
+  th.ordenavel.ativo{color:var(--ink);}
+  th.ordenavel.ativo .seta{opacity:1;}
 </style>
 </head>
 <body>
@@ -541,8 +547,8 @@
             <th>Município/UF</th>
             <th>Telefone</th>
             <th>Status</th>
-            <th>Tentativas</th>
-            <th>Último contato</th>
+            <th class="ordenavel" data-ordenar="tentativas" title="Clique para ordenar">Tentativas<span class="seta">↕</span></th>
+            <th class="ordenavel" data-ordenar="data" title="Clique para ordenar">Último contato<span class="seta">↕</span></th>
           </tr>
         </thead>
         <tbody id="fila-body"></tbody>
@@ -1328,6 +1334,73 @@ const STATUS_LABEL = {
   enviado_whatsapp: "Enviado por WhatsApp"
 };
 
+// ---------- Ordenação por Tentativas / Último contato ----------
+// Cada tabela guarda sua própria ordenação: { chave: "tentativas" | "data" | null, dir: "desc" | "asc" }
+const ordenacao = {
+  fila: { chave: null, dir: "desc" },
+  pessoaPesquisa: { chave: null, dir: "desc" },
+  pessoaConvite: { chave: null, dir: "desc" }
+};
+
+// Ciclo do clique: decrescente > crescente > sem ordenação
+function alternarOrdenacao(tabela, chave) {
+  const o = ordenacao[tabela];
+  if (o.chave !== chave) { o.chave = chave; o.dir = "desc"; }
+  else if (o.dir === "desc") { o.dir = "asc"; }
+  else { o.chave = null; o.dir = "desc"; }
+}
+
+// getTent(c) devolve o número de tentativas; getData(c) devolve a data (ou null)
+function ordenarLista(list, tabela, getTent, getData) {
+  const o = ordenacao[tabela];
+  if (!o.chave) return list;
+  const sinal = o.dir === "desc" ? -1 : 1;
+  const tempo = (c) => { const d = getData(c); const t = d ? new Date(d).getTime() : NaN; return isNaN(t) ? null : t; };
+  const porData = (a, b, s) => {
+    const ta = tempo(a), tb = tempo(b);
+    if (ta === null && tb === null) return 0;
+    if (ta === null) return 1;   // sem contato fica sempre no final
+    if (tb === null) return -1;
+    return (ta - tb) * s;
+  };
+  return [...list].sort((a, b) => {
+    if (o.chave === "tentativas") {
+      const dif = ((getTent(a) || 0) - (getTent(b) || 0)) * sinal;
+      if (dif !== 0) return dif;
+      return porData(a, b, 1); // desempate: contato mais antigo primeiro
+    }
+    const dif = porData(a, b, sinal);
+    if (dif !== 0) return dif;
+    return (getTent(b) || 0) - (getTent(a) || 0); // desempate: mais tentativas primeiro
+  });
+}
+
+// Atualiza setas e destaque dos cabeçalhos de uma tabela
+function marcarCabecalhos(thead, tabela) {
+  const o = ordenacao[tabela];
+  thead.querySelectorAll("th.ordenavel").forEach(th => {
+    const ativo = th.dataset.ordenar === o.chave;
+    th.classList.toggle("ativo", ativo);
+    th.querySelector(".seta").textContent = ativo ? (o.dir === "desc" ? "▼" : "▲") : "↕";
+  });
+}
+
+function thOrdenavel(chave, rotulo) {
+  return `<th class="ordenavel" data-ordenar="${chave}" title="Clique para ordenar">${rotulo}<span class="seta">↕</span></th>`;
+}
+
+// Clique nos cabeçalhos da Fila de ligação
+document.querySelectorAll("#view-fila th.ordenavel").forEach(th => {
+  th.addEventListener("click", () => { alternarOrdenacao("fila", th.dataset.ordenar); renderFila(); });
+});
+// Clique nos cabeçalhos da Minha fila (o cabeçalho é recriado a cada render, então o clique é delegado)
+document.getElementById("pessoa-head").addEventListener("click", (e) => {
+  const th = e.target.closest("th.ordenavel");
+  if (!th) return;
+  alternarOrdenacao(currentFilaPessoa === "pesquisa" ? "pessoaPesquisa" : "pessoaConvite", th.dataset.ordenar);
+  renderPessoa();
+});
+
 function renderFila() {
   let list = clientes.filter(c => {
     const matchStatus = currentStatusFilter === "todos" || c.status === currentStatusFilter;
@@ -1338,6 +1411,8 @@ function renderFila() {
       || String(c.codigo || "").toLowerCase().includes(currentSearch);
     return matchStatus && matchSearch;
   });
+  list = ordenarLista(list, "fila", c => c.tentativas, c => c.data_contato);
+  marcarCabecalhos(document.querySelector("#view-fila thead"), "fila");
 
   filaVisiveisIds = list.map(c => c.id);
   const tbody = document.getElementById("fila-body");
@@ -1556,8 +1631,10 @@ function renderPessoa() {
   const s = currentPessoaSearch;
 
   if (currentFilaPessoa === "pesquisa") {
-    head.innerHTML = "<tr><th>Cliente</th><th>Município/UF</th><th>Telefone</th><th>Status</th><th>Tentativas</th><th>Último contato</th></tr>";
-    const list = filaP.filter(c => (currentPessoaStatus === "todos" || c.status === currentPessoaStatus) && (!s || textoBusca(c).includes(s)));
+    head.innerHTML = `<tr><th>Cliente</th><th>Município/UF</th><th>Telefone</th><th>Status</th>${thOrdenavel("tentativas", "Tentativas")}${thOrdenavel("data", "Último contato")}</tr>`;
+    marcarCabecalhos(head, "pessoaPesquisa");
+    let list = filaP.filter(c => (currentPessoaStatus === "todos" || c.status === currentPessoaStatus) && (!s || textoBusca(c).includes(s)));
+    list = ordenarLista(list, "pessoaPesquisa", c => c.tentativas, c => c.data_contato);
     if (list.length === 0) {
       empty.classList.remove("hidden");
       empty.textContent = filaP.length === 0 ? "Nenhuma pesquisa pendente para esta pessoa." : "Nenhum cliente encontrado com esse filtro/busca.";
@@ -1581,8 +1658,9 @@ function renderPessoa() {
       tbody.appendChild(tr);
     });
   } else {
-    head.innerHTML = "<tr><th>Cliente</th><th>Telefone</th><th>NPS</th><th>Tentativas de convite</th><th>Última tentativa</th></tr>";
-    const list = filaC.filter(c => {
+    head.innerHTML = `<tr><th>Cliente</th><th>Telefone</th><th>NPS</th>${thOrdenavel("tentativas", "Tentativas de convite")}${thOrdenavel("data", "Última tentativa")}</tr>`;
+    marcarCabecalhos(head, "pessoaConvite");
+    let list = filaC.filter(c => {
       if (s && !membrosDoBloco(c).some(m => textoBusca(m).includes(s))) return false;
       const respondeu = !!respostaDoBloco(c);
       if (currentConviteNps === "respondeu" && !respondeu) return false;
@@ -1592,6 +1670,9 @@ function renderPessoa() {
       if (currentConviteTent === "tentou" && tent === 0) return false;
       return true;
     });
+    list = ordenarLista(list, "pessoaConvite",
+      c => (c.convite_historico || []).length,
+      c => { const h = c.convite_historico || []; return h.length ? h[h.length - 1].data : null; });
     if (list.length === 0) {
       empty.classList.remove("hidden");
       empty.textContent = filaC.length === 0 ? "Nenhum convite pendente para esta pessoa." : "Nenhum cliente encontrado com esse filtro/busca.";
